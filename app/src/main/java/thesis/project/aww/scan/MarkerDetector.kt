@@ -24,9 +24,9 @@ fun detectOmrMarkers(bitmap: Bitmap): MarkerCorners? {
 
     Imgproc.adaptiveThreshold(
         mat, mat, 255.0,
-        Imgproc.ADAPTIVE_THRESH_GAUSSIAN_C,
+        Imgproc.ADAPTIVE_THRESH_MEAN_C,  // updated from GAUSSIAN_C
         Imgproc.THRESH_BINARY_INV,
-        11, 3.0
+        15, 2.0  // updated parameters for more reliable binarization
     )
 
     val contours = mutableListOf<MatOfPoint>()
@@ -43,14 +43,17 @@ fun detectOmrMarkers(bitmap: Bitmap): MarkerCorners? {
         if (approx.total() == 4L) {
             val points = approx.toArray()
             val area = Imgproc.contourArea(MatOfPoint(*points.map { Point(it.x, it.y) }.toTypedArray()))
-            if (area in 100.0..5000.0) {
+            if (area in 80.0..8000.0) { // expanded from 100..5000 to 80..8000
                 val rect = Imgproc.boundingRect(MatOfPoint(*points))
                 val aspectRatio = rect.width.toFloat() / rect.height.toFloat()
 
                 if (aspectRatio in 0.7..1.3 && isRoughlyCircular(contour)) {
                     val cx = points.map { it.x }.average()
                     val cy = points.map { it.y }.average()
-                    detectedCenters.add(Point(cx, cy))
+                    val fillLevel = getBubbleFillLevel(mat, Point(cx, cy), 10)
+                    if (fillLevel > 0.35) {
+                        detectedCenters.add(Point(cx, cy))
+                    }
                 }
             }
         }
@@ -78,6 +81,18 @@ fun detectOmrMarkers(bitmap: Bitmap): MarkerCorners? {
         bottomLeft = PointF(bottomLeft.x.toFloat(), bottomLeft.y.toFloat()),
         bottomRight = PointF(bottomRight.x.toFloat(), bottomRight.y.toFloat())
     )
+}
+
+private fun getBubbleFillLevel(mat: Mat, center: Point, radius: Int): Double {
+    val x = max(0, center.x.toInt() - radius)
+    val y = max(0, center.y.toInt() - radius)
+    val width = min(mat.cols() - x, radius * 2)
+    val height = min(mat.rows() - y, radius * 2)
+
+    val roi = mat.submat(y, y + height, x, x + width)
+    val nonZero = Core.countNonZero(roi)
+    val total = width * height
+    return nonZero.toDouble() / total
 }
 
 private fun isRoughlyCircular(contour: MatOfPoint): Boolean {
@@ -130,7 +145,6 @@ fun warpToTopView(
     val srcMat = Mat()
     Utils.bitmapToMat(bitmap, srcMat)
 
-    // Step 1: Source points (from detected markers)
     val srcPoints = MatOfPoint2f(
         Point(corners.topLeft.x.toDouble(), corners.topLeft.y.toDouble()),
         Point(corners.topRight.x.toDouble(), corners.topRight.y.toDouble()),
@@ -138,17 +152,15 @@ fun warpToTopView(
         Point(corners.bottomLeft.x.toDouble(), corners.bottomLeft.y.toDouble())
     )
 
-    // Step 2: Add margin to destination area
-    val margin = -21.0  // Tweak this based on real scan — try 8.0–15.0
+    val margin = -21.0
 
     val dstPoints = MatOfPoint2f(
-        Point(0.0 - margin, 0.0 - margin),                                 // top-left
-        Point(outputWidth.toDouble() + margin, 0.0 - margin),             // top-right
-        Point(outputWidth.toDouble() + margin, outputHeight.toDouble() + margin), // bottom-right
-        Point(0.0 - margin, outputHeight.toDouble() + margin)             // bottom-left
+        Point(0.0 - margin, 0.0 - margin),
+        Point(outputWidth.toDouble() + margin, 0.0 - margin),
+        Point(outputWidth.toDouble() + margin, outputHeight.toDouble() + margin),
+        Point(0.0 - margin, outputHeight.toDouble() + margin)
     )
 
-    // Step 3: Apply transform
     val transform = Imgproc.getPerspectiveTransform(srcPoints, dstPoints)
     val warped = Mat()
     Imgproc.warpPerspective(srcMat, warped, transform, Size(outputWidth.toDouble(), outputHeight.toDouble()))

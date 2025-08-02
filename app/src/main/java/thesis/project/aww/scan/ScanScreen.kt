@@ -255,7 +255,13 @@ fun ScanScreen(navigateToResult: () -> Unit) {
             onDismissRequest = { showNameDialog = false },
             confirmButton = {
                 TextButton(onClick = {
-                    val score = detectedAnswers.zip(selectedSheet?.answerKey.orEmpty())
+                    if (selectedSheet == null) {
+                        errorMessage = "❗ Cannot save. No OMR sheet selected."
+                        showNameDialog = false
+                        return@TextButton
+                    }
+
+                    val score = detectedAnswers.zip(selectedSheet!!.answerKey)
                         .count { (given, correct) -> given == correct }
 
                     val answersString = detectedAnswers.joinToString("") { it?.toString() ?: "-" }
@@ -263,11 +269,11 @@ fun ScanScreen(navigateToResult: () -> Unit) {
                     viewModel.insertResult(
                         StudentResult(
                             studentName = studentName,
-                            omrSheetTitle = selectedSheet?.title ?: "Untitled",
-                            totalQuestions = selectedSheet?.questionCount ?: 0,
+                            omrSheetTitle = selectedSheet!!.title,
+                            totalQuestions = selectedSheet!!.questionCount,
                             score = score,
                             answers = answersString,
-                            total = selectedSheet?.questionCount ?: 0
+                            total = selectedSheet!!.questionCount
                         )
                     )
 
@@ -276,7 +282,8 @@ fun ScanScreen(navigateToResult: () -> Unit) {
                 }) {
                     Text("Save")
                 }
-            },
+            }
+            ,
             dismissButton = {
                 TextButton(onClick = { showNameDialog = false }) {
                     Text("Cancel")
