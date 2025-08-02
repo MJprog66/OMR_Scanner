@@ -194,41 +194,59 @@ fun ScanScreen(navigateToResult: () -> Unit) {
 
         // Scan or Reset Button
         Column(modifier = Modifier.padding(16.dp)) {
-            Button(
-                onClick = {
-                    if (scannedBitmap == null) {
-                        CameraManager.captureAndProcessImage(
-                            context = context,
-                            imageCapture = imageCapture,
-                            onSuccess = { warpedBitmap ->
-                                selectedSheet?.let { sheet ->
+            if (scannedBitmap == null) {
+                Button(
+                    onClick = {
+                        if (selectedSheet == null) {
+                            errorMessage = "❗ Please select an OMR sheet before scanning."
+                        } else {
+                            errorMessage = null
+                            CameraManager.captureAndProcessImage(
+                                context = context,
+                                imageCapture = imageCapture,
+                                onSuccess = { warpedBitmap ->
                                     val result = OmrBubbleDetector.detectFilledBubbles(
                                         bitmap = warpedBitmap,
-                                        questionCount = sheet.questionCount,
-                                        answerKey = sheet.answerKey
+                                        questionCount = selectedSheet!!.questionCount,
+                                        answerKey = selectedSheet!!.answerKey
                                     )
                                     scannedBitmap = result.debugBitmap
                                     detectedAnswers = result.answers
-                                    showNameDialog = true
-                                } ?: run {
-                                    scannedBitmap = warpedBitmap
+                                },
+                                onError = {
+                                    errorMessage = "❌ Scan failed. Please try again."
+                                    Log.e("ScanScreen", errorMessage!!)
                                 }
-                            },
-                            onError = {
-                                errorMessage = "Scan failed"
-                                Log.e("ScanScreen", errorMessage!!)
-                            }
-                        )
-                    } else {
-                        scannedBitmap = null
-                        detectedAnswers = emptyList()
+                            )
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Scan OMR Sheet")
+                }
+            } else {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Button(
+                        onClick = {
+                            scannedBitmap = null
+                            detectedAnswers = emptyList()
+                        },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Scan Again")
                     }
-                },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(if (scannedBitmap == null) "Scan OMR Sheet" else "Scan Again")
+                    Button(
+                        onClick = {
+                            showNameDialog = true
+                        },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Save")
+                    }
+                }
             }
         }
+
     }
 
     // Dialog: Enter Student Name
