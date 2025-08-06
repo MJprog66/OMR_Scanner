@@ -1,9 +1,12 @@
 package thesis.project.aww.create
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -11,6 +14,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.Alignment
+import androidx.compose.foundation.shape.CircleShape
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import java.io.File
@@ -99,38 +104,52 @@ fun ViewCreatedOMRsScreen(onBack: () -> Unit) {
                         Spacer(Modifier.height(12.dp))
 
                         Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier
+                                .fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            OutlinedButton(onClick = {
-                                fileMap[sheet]?.let { file ->
-                                    sheetToEdit = sheet to file
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                OutlinedButton(onClick = {
+                                    fileMap[sheet]?.let { file ->
+                                        sheetToEdit = sheet to file
+                                    }
+                                }) {
+                                    Text("Edit")
                                 }
-                            }) {
-                                Text("Edit")
+
+                                OutlinedButton(onClick = {
+                                    printOmrSheet(context, sheet.title, sheet.questionCount)
+                                }) {
+                                    Text("Print")
+                                }
+
+                                OutlinedButton(onClick = {
+                                    // Placeholder for scan functionality
+                                }) {
+                                    Text("Scan")
+                                }
                             }
 
-                            OutlinedButton(onClick = {
-                                printOmrSheet(context, sheet.title, sheet.questionCount)
-                            }) {
-                                Text("Print")
-                            }
-
-                            OutlinedButton(onClick = {
-                                // Placeholder for scan functionality
-                            }) {
-                                Text("Scan")
-                            }
-
-                            Button(
+                            IconButton(
                                 onClick = { sheetToDelete = sheet },
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = MaterialTheme.colorScheme.error,
-                                    contentColor = MaterialTheme.colorScheme.onError
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .background(
+                                        color = MaterialTheme.colorScheme.error.copy(alpha = 0.1f),
+                                        shape = CircleShape
+                                    ),
+                                colors = IconButtonDefaults.iconButtonColors(
+                                    contentColor = MaterialTheme.colorScheme.error
                                 )
                             ) {
-                                Text("Del")
+                                Icon(
+                                    imageVector = Icons.Default.Delete,
+                                    contentDescription = "Delete"
+                                )
                             }
+
+
                         }
                     }
                 }
