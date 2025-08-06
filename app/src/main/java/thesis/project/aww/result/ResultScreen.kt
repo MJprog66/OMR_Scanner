@@ -1,23 +1,25 @@
 package thesis.project.aww.result
 
+import android.graphics.BitmapFactory
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
-import androidx.navigation.NavHostController
+import java.io.File
 
 @Composable
 fun ResultScreen(
     navigateToResult: (() -> Unit)? = null,
-    omrSheetTitle: String? = null,
-    totalQuestions: Int? = null
+    omrSheetTitle: String? = null
 ) {
     val context = LocalContext.current
     val viewModel: ResultViewModel = viewModel(
@@ -30,6 +32,7 @@ fun ResultScreen(
 
     var sheetTitles by remember { mutableStateOf<List<String>>(emptyList()) }
     var selectedTitle by remember { mutableStateOf(omrSheetTitle) }
+    var expanded by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         sheetTitles = viewModel.getAllSheetTitles()
@@ -40,8 +43,6 @@ fun ResultScreen(
         if (selectedTitle == null) {
             Text("Select OMR Sheet Title", style = MaterialTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(8.dp))
-
-            var expanded by remember { mutableStateOf(false) }
 
             Box {
                 OutlinedButton(onClick = { expanded = true }) {
@@ -79,8 +80,7 @@ fun ResultScreen(
             } else {
                 LazyColumn {
                     items(results) { result ->
-                        val isPassed = result.score >= result.totalQuestions / 2
-                        val cardColor = if (isPassed)
+                        val cardColor = if (result.isPass)
                             MaterialTheme.colorScheme.secondaryContainer
                         else
                             MaterialTheme.colorScheme.errorContainer
@@ -94,6 +94,25 @@ fun ResultScreen(
                             Column(Modifier.padding(12.dp)) {
                                 Text("Student: ${result.studentName}")
                                 Text("Score: ${result.score}/${result.totalQuestions}")
+
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                // Load and display image if file exists
+                                val imageFile = File(result.image)
+                                if (imageFile.exists()) {
+                                    val bitmap = BitmapFactory.decodeFile(imageFile.absolutePath)
+                                    bitmap?.let {
+                                        Image(
+                                            bitmap = it.asImageBitmap(),
+                                            contentDescription = "Scanned Sheet",
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(200.dp)
+                                        )
+                                    }
+                                } else {
+                                    Text("Image not found", style = MaterialTheme.typography.bodySmall)
+                                }
                             }
                         }
                     }
@@ -120,7 +139,6 @@ fun ResultScreen(
                     Text("Back")
                 }
             }
-
         }
     }
 }

@@ -25,6 +25,7 @@ import com.google.gson.Gson
 import thesis.project.aww.create.OmrSheet
 import thesis.project.aww.result.ResultViewModel
 import thesis.project.aww.result.StudentResult
+import thesis.project.aww.util.FileUtils
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
@@ -115,12 +116,8 @@ fun ScanScreen(navigateToResult: () -> Unit) {
             )
         }
 
-        // Dropdown for OMR sheet selection
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-        ) {
+        // Dropdown
+        Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
             ExposedDropdownMenuBox(
                 expanded = expanded,
                 onExpandedChange = { expanded = !expanded }
@@ -140,22 +137,17 @@ fun ScanScreen(navigateToResult: () -> Unit) {
                             ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
                         }
                     },
-                    modifier = Modifier
-                        .menuAnchor()
-                        .fillMaxWidth()
+                    modifier = Modifier.menuAnchor().fillMaxWidth()
                 )
 
                 ExposedDropdownMenu(
                     expanded = expanded,
                     onDismissRequest = { expanded = false }
                 ) {
-                    DropdownMenuItem(
-                        text = { Text("None") },
-                        onClick = {
-                            selectedSheet = null
-                            expanded = false
-                        }
-                    )
+                    DropdownMenuItem(text = { Text("None") }, onClick = {
+                        selectedSheet = null
+                        expanded = false
+                    })
                     omrSheets.forEach { sheet ->
                         DropdownMenuItem(
                             text = { Text(sheet.title) },
@@ -171,7 +163,6 @@ fun ScanScreen(navigateToResult: () -> Unit) {
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Preview Box
         Box(modifier = Modifier.weight(1f)) {
             if (scannedBitmap == null) {
                 AndroidView(
@@ -192,7 +183,6 @@ fun ScanScreen(navigateToResult: () -> Unit) {
             }
         }
 
-        // Scan or Reset Button
         Column(modifier = Modifier.padding(16.dp)) {
             if (scannedBitmap == null) {
                 Button(
@@ -225,7 +215,10 @@ fun ScanScreen(navigateToResult: () -> Unit) {
                     Text("Scan OMR Sheet")
                 }
             } else {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
                     Button(
                         onClick = {
                             scannedBitmap = null
@@ -246,10 +239,8 @@ fun ScanScreen(navigateToResult: () -> Unit) {
                 }
             }
         }
-
     }
 
-    // Dialog: Enter Student Name
     if (showNameDialog) {
         AlertDialog(
             onDismissRequest = { showNameDialog = false },
@@ -260,30 +251,42 @@ fun ScanScreen(navigateToResult: () -> Unit) {
                         showNameDialog = false
                         return@TextButton
                     }
+                    if (studentName.isBlank()) {
+                        errorMessage = "❗ Student name cannot be empty."
+                        showNameDialog = false
+                        return@TextButton
+                    }
 
                     val score = detectedAnswers.zip(selectedSheet!!.answerKey)
                         .count { (given, correct) -> given == correct }
 
+                    val isPass = score >= selectedSheet!!.questionCount / 2
                     val answersString = detectedAnswers.joinToString("") { it?.toString() ?: "-" }
 
                     viewModel.insertResult(
                         StudentResult(
                             studentName = studentName,
                             omrSheetTitle = selectedSheet!!.title,
-                            totalQuestions = selectedSheet!!.questionCount,
-                            score = score,
                             answers = answersString,
-                            total = selectedSheet!!.questionCount
+                            score = score,
+                            isPass = isPass,
+                            image = FileUtils.saveBitmapToInternalStorage(
+                                context = context,
+                                bitmap = scannedBitmap!!,
+                                fileName = "${studentName}_${System.currentTimeMillis()}"
+                            ),
+                            totalQuestions = selectedSheet!!.questionCount,
+                            timestamp = System.currentTimeMillis()
                         )
                     )
 
+                    studentName = ""
                     showNameDialog = false
                     navigateToResult()
                 }) {
                     Text("Save")
                 }
-            }
-            ,
+            },
             dismissButton = {
                 TextButton(onClick = { showNameDialog = false }) {
                     Text("Cancel")

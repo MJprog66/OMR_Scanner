@@ -11,6 +11,7 @@ data class StudentResult(
     val totalQuestions: Int,
     val answers: String, // Store answers as comma-separated String like "A,B,C,null"
     val score: Int,
-    val total: Int,
+    val isPass: Boolean,
+    val image: String,
     val timestamp: Long = System.currentTimeMillis()
 )
