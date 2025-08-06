@@ -20,11 +20,11 @@ class ResultViewModel(application: Application) : AndroidViewModel(application) 
 
     // Call this to load results for the selected OMR sheet
     fun loadResultsForTitle(title: String) {
-        _selectedTitle.value = title
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             _results.value = dao.getResultsByTitle(title)
         }
     }
+
 
     // Call this to delete a single result and refresh the list
     fun deleteStudentResult(result: StudentResult) {

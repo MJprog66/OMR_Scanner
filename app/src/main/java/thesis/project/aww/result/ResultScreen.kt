@@ -10,6 +10,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
@@ -19,6 +20,12 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import kotlinx.coroutines.launch
 import java.io.File
+
+enum class SortOption(val label: String) {
+    DATE("Date"),
+    NAME("Name"),
+    SCORE("Score")
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -49,6 +56,8 @@ fun ResultScreen(
     var resultToDelete by remember { mutableStateOf<StudentResult?>(null) }
 
     var showDeleteAllConfirmDialog by remember { mutableStateOf(false) }
+
+    var selectedSortOption by remember { mutableStateOf(SortOption.DATE) }
 
     LaunchedEffect(Unit) {
         sheetTitles = viewModel.getAllSheetTitles()
@@ -89,9 +98,47 @@ fun ResultScreen(
             }
 
             selectedTitle?.let { title ->
-                val results by viewModel.results.collectAsState()
+                val originalResults by viewModel.results.collectAsState()
+
+                val results = remember(originalResults, selectedSortOption) {
+                    when (selectedSortOption) {
+                        SortOption.DATE -> originalResults.sortedByDescending { it.timestamp }
+                        SortOption.NAME -> originalResults.sortedBy { it.studentName }
+                        SortOption.SCORE -> originalResults.sortedByDescending { it.score }
+                    }
+                }
 
                 Text("Results for \"$title\"", style = MaterialTheme.typography.titleLarge)
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Sort by:")
+
+                    var sortExpanded by remember { mutableStateOf(false) }
+                    OutlinedButton(onClick = { sortExpanded = true }) {
+                        Text(selectedSortOption.label)
+                    }
+
+                    DropdownMenu(
+                        expanded = sortExpanded,
+                        onDismissRequest = { sortExpanded = false }
+                    ) {
+                        SortOption.values().forEach { option ->
+                            DropdownMenuItem(
+                                text = { Text(option.label) },
+                                onClick = {
+                                    selectedSortOption = option
+                                    sortExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+
                 Spacer(modifier = Modifier.height(8.dp))
 
                 if (results.isEmpty()) {
@@ -134,16 +181,20 @@ fun ResultScreen(
 
                                     val imageFile = File(result.image)
                                     if (imageFile.exists()) {
-                                        val bitmap = BitmapFactory.decodeFile(imageFile.absolutePath)
-                                        bitmap?.let {
+                                        val bitmapState by produceState<android.graphics.Bitmap?>(initialValue = null, imageFile) {
+                                            if (imageFile.exists()) {
+                                                value = BitmapFactory.decodeFile(imageFile.absolutePath)
+                                            }
+                                        }
+                                        bitmapState?.let { bitmap ->
                                             Image(
-                                                bitmap = it.asImageBitmap(),
+                                                bitmap = bitmap.asImageBitmap(),
                                                 contentDescription = "Scanned Sheet",
                                                 modifier = Modifier
                                                     .fillMaxWidth()
                                                     .height(100.dp)
                                                     .clickable {
-                                                        dialogBitmap = it
+                                                        dialogBitmap = bitmap
                                                         showDialog = true
                                                     }
                                             )
