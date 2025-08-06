@@ -266,7 +266,7 @@ fun ScanScreen(navigateToResult: () -> Unit) {
                     viewModel.insertResult(
                         StudentResult(
                             studentName = studentName,
-                            omrSheetTitle = selectedSheet!!.title,
+                            sheetTitle = selectedSheet!!.title,
                             answers = answersString,
                             score = score,
                             isPass = isPass,

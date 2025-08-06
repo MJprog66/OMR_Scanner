@@ -7,7 +7,7 @@ import androidx.room.PrimaryKey
 data class StudentResult(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
     val studentName: String,
-    val omrSheetTitle: String,
+    val sheetTitle: String,
     val totalQuestions: Int,
     val answers: String, // Store answers as comma-separated String like "A,B,C,null"
     val score: Int,
