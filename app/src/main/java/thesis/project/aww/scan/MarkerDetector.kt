@@ -26,7 +26,7 @@ fun detectOmrMarkers(bitmap: Bitmap): MarkerCorners? {
         mat, mat, 255.0,
         Imgproc.ADAPTIVE_THRESH_MEAN_C,  // updated from GAUSSIAN_C
         Imgproc.THRESH_BINARY_INV,
-        15, 2.0  // updated parameters for more reliable binarization
+        11, 1.5  // updated parameters for more reliable binarization
     )
 
     val contours = mutableListOf<MatOfPoint>()
@@ -51,7 +51,7 @@ fun detectOmrMarkers(bitmap: Bitmap): MarkerCorners? {
                     val cx = points.map { it.x }.average()
                     val cy = points.map { it.y }.average()
                     val fillLevel = getBubbleFillLevel(mat, Point(cx, cy), 10)
-                    if (fillLevel > 0.35) {
+                    if (fillLevel > 0.25) {
                         detectedCenters.add(Point(cx, cy))
                     }
                 }

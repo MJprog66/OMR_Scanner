@@ -9,6 +9,7 @@ import kotlinx.coroutines.launch
 import thesis.project.aww.data.AppDatabase
 import thesis.project.aww.result.StudentResult
 import java.io.File
+import kotlin.String
 
 class ResultViewModel(application: Application) : AndroidViewModel(application) {
 

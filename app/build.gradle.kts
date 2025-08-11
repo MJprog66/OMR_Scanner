@@ -91,6 +91,7 @@ dependencies {
 
     // Image loading
     implementation(libs.coil.compose)
+    implementation("io.coil-kt:coil-compose:2.4.0")
 
     // Local module
     implementation(project(":sdk"))

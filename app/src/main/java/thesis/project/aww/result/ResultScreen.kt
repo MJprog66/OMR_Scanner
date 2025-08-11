@@ -1,7 +1,5 @@
 package thesis.project.aww.result
 
-import android.graphics.BitmapFactory
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -12,19 +10,27 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import kotlinx.coroutines.launch
-import java.io.File
+import thesis.project.aww.result.StudentResult
+import kotlin.String
 
 enum class SortOption(val label: String) {
     DATE("Date"),
     NAME("Name"),
     SCORE("Score")
+}
+
+enum class FilterOption(val label: String) {
+    ALL("All"),
+    PASS("Pass"),
+    FAIL("Fail")
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -50,7 +56,7 @@ fun ResultScreen(
     var expanded by remember { mutableStateOf(false) }
 
     var showDialog by remember { mutableStateOf(false) }
-    var dialogBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
+    var dialogImagePath by remember { mutableStateOf<String?>(null) }
 
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
     var resultToDelete by remember { mutableStateOf<StudentResult?>(null) }
@@ -58,6 +64,8 @@ fun ResultScreen(
     var showDeleteAllConfirmDialog by remember { mutableStateOf(false) }
 
     var selectedSortOption by remember { mutableStateOf(SortOption.DATE) }
+    var selectedFilterOption by remember { mutableStateOf(FilterOption.ALL) }
+    var searchQuery by remember { mutableStateOf("") }
 
     LaunchedEffect(Unit) {
         sheetTitles = viewModel.getAllSheetTitles()
@@ -88,6 +96,7 @@ fun ResultScreen(
                                     selectedTitle = title
                                     viewModel.loadResultsForTitle(title)
                                     expanded = false
+                                    searchQuery = "" // reset search on sheet change
                                 }
                             )
                         }
@@ -100,29 +109,56 @@ fun ResultScreen(
             selectedTitle?.let { title ->
                 val originalResults by viewModel.results.collectAsState()
 
-                val results = remember(originalResults, selectedSortOption) {
+                // Apply filtering (Pass/Fail/All)
+                val filteredResults = remember(originalResults, selectedFilterOption) {
+                    when (selectedFilterOption) {
+                        FilterOption.ALL -> originalResults
+                        FilterOption.PASS -> originalResults.filter { it.isPass }
+                        FilterOption.FAIL -> originalResults.filter { !it.isPass }
+                    }
+                }
+
+                // Apply search filtering by studentName (case-insensitive)
+                val searchedResults = remember(filteredResults, searchQuery) {
+                    if (searchQuery.isBlank()) filteredResults
+                    else filteredResults.filter {
+                        it.studentName.contains(searchQuery, ignoreCase = true)
+                    }
+                }
+
+                // Apply sorting
+                val results = remember(searchedResults, selectedSortOption) {
                     when (selectedSortOption) {
-                        SortOption.DATE -> originalResults.sortedByDescending { it.timestamp }
-                        SortOption.NAME -> originalResults.sortedBy { it.studentName }
-                        SortOption.SCORE -> originalResults.sortedByDescending { it.score }
+                        SortOption.DATE -> searchedResults.sortedByDescending { it.timestamp }
+                        SortOption.NAME -> searchedResults.sortedBy { it.studentName }
+                        SortOption.SCORE -> searchedResults.sortedByDescending { it.score }
                     }
                 }
 
                 Text("Results for \"$title\"", style = MaterialTheme.typography.titleLarge)
                 Spacer(modifier = Modifier.height(8.dp))
 
+                // Search bar
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    label = { Text("Search by Student Name") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Sort and Filter Row
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Sort by:")
-
+                    // Sort dropdown
                     var sortExpanded by remember { mutableStateOf(false) }
                     OutlinedButton(onClick = { sortExpanded = true }) {
-                        Text(selectedSortOption.label)
+                        Text("Sort: ${selectedSortOption.label}")
                     }
-
                     DropdownMenu(
                         expanded = sortExpanded,
                         onDismissRequest = { sortExpanded = false }
@@ -133,6 +169,26 @@ fun ResultScreen(
                                 onClick = {
                                     selectedSortOption = option
                                     sortExpanded = false
+                                }
+                            )
+                        }
+                    }
+
+                    // Filter dropdown
+                    var filterExpanded by remember { mutableStateOf(false) }
+                    OutlinedButton(onClick = { filterExpanded = true }) {
+                        Text("Filter: ${selectedFilterOption.label}")
+                    }
+                    DropdownMenu(
+                        expanded = filterExpanded,
+                        onDismissRequest = { filterExpanded = false }
+                    ) {
+                        FilterOption.values().forEach { option ->
+                            DropdownMenuItem(
+                                text = { Text(option.label) },
+                                onClick = {
+                                    selectedFilterOption = option
+                                    filterExpanded = false
                                 }
                             )
                         }
@@ -179,29 +235,18 @@ fun ResultScreen(
 
                                     Spacer(modifier = Modifier.height(8.dp))
 
-                                    val imageFile = File(result.image)
-                                    if (imageFile.exists()) {
-                                        val bitmapState by produceState<android.graphics.Bitmap?>(initialValue = null, imageFile) {
-                                            if (imageFile.exists()) {
-                                                value = BitmapFactory.decodeFile(imageFile.absolutePath)
-                                            }
-                                        }
-                                        bitmapState?.let { bitmap ->
-                                            Image(
-                                                bitmap = bitmap.asImageBitmap(),
-                                                contentDescription = "Scanned Sheet",
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .height(100.dp)
-                                                    .clickable {
-                                                        dialogBitmap = bitmap
-                                                        showDialog = true
-                                                    }
-                                            )
-                                        }
-                                    } else {
-                                        Text("Image not found", style = MaterialTheme.typography.bodySmall)
-                                    }
+                                    AsyncImage(
+                                        model = result.image,
+                                        contentDescription = "Scanned Sheet",
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(100.dp)
+                                            .clickable {
+                                                dialogImagePath = result.image
+                                                showDialog = true
+                                            },
+                                        onError = { /* optional error handling */ }
+                                    )
                                 }
                             }
                         }
@@ -229,7 +274,7 @@ fun ResultScreen(
     }
 
     // Preview Full Image Dialog
-    if (showDialog && dialogBitmap != null) {
+    if (showDialog && dialogImagePath != null) {
         AlertDialog(
             onDismissRequest = { showDialog = false },
             confirmButton = {
@@ -238,8 +283,8 @@ fun ResultScreen(
                 }
             },
             text = {
-                Image(
-                    bitmap = dialogBitmap!!.asImageBitmap(),
+                AsyncImage(
+                    model = dialogImagePath,
                     contentDescription = "Full Image",
                     modifier = Modifier
                         .fillMaxWidth()
