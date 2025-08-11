@@ -1,25 +1,30 @@
 package thesis.project.aww.result
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import coil.compose.AsyncImage
-import coil.request.ImageRequest
 import kotlinx.coroutines.launch
 import thesis.project.aww.result.StudentResult
-import kotlin.String
 
 enum class SortOption(val label: String) {
     DATE("Date"),
@@ -273,25 +278,58 @@ fun ResultScreen(
         }
     }
 
-    // Preview Full Image Dialog
+    // Fullscreen Zoomable Image Viewer
     if (showDialog && dialogImagePath != null) {
-        AlertDialog(
-            onDismissRequest = { showDialog = false },
-            confirmButton = {
-                TextButton(onClick = { showDialog = false }) {
-                    Text("Close")
-                }
-            },
-            text = {
+        var scale by remember { mutableStateOf(1f) }
+        var offsetX by remember { mutableStateOf(0f) }
+        var offsetY by remember { mutableStateOf(0f) }
+
+        Surface(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black),
+            color = Color.Black
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .pointerInput(Unit) {
+                        detectTransformGestures { _, pan, zoom, _ ->
+                            scale = (scale * zoom).coerceIn(1f, 5f)
+                            offsetX += pan.x
+                            offsetY += pan.y
+                        }
+                    }
+            ) {
                 AsyncImage(
                     model = dialogImagePath,
                     contentDescription = "Full Image",
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(1f)
+                        .fillMaxSize()
+                        .graphicsLayer(
+                            scaleX = scale,
+                            scaleY = scale,
+                            translationX = offsetX,
+                            translationY = offsetY
+                        )
                 )
+
+                IconButton(
+                    onClick = { showDialog = false },
+                    modifier = Modifier
+                        .padding(16.dp)
+                        .align(Alignment.TopEnd)
+                        .size(36.dp)
+                        .background(Color.Black.copy(alpha = 0.5f), shape = CircleShape)
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Close,
+                        contentDescription = "Close Fullscreen",
+                        tint = Color.White
+                    )
+                }
             }
-        )
+        }
     }
 
     // Single Delete Confirmation Dialog
@@ -331,8 +369,10 @@ fun ResultScreen(
                     coroutineScope.launch {
                         snackbarHostState.showSnackbar("Deleted all results for \"$selectedTitle\"")
                     }
+                    // After deletion, reset selectedTitle and update sheetTitles list
+                    val removedTitle = selectedTitle
                     selectedTitle = null
-                    sheetTitles = sheetTitles.filterNot { it == selectedTitle }
+                    sheetTitles = sheetTitles.filterNot { it == removedTitle }
                     showDeleteAllConfirmDialog = false
                 }) {
                     Text("Delete All")
