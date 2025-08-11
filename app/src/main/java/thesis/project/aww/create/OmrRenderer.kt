@@ -95,6 +95,7 @@ fun printOmrSheet(context: Context, title: String, questionCount: Int) {
                 val cx = bubbleStartX + (j * bubbleSpacingExact)
                 val cy = yRowCenter
                 paint.style = Paint.Style.STROKE
+                paint.strokeWidth = 1.5f
                 canvasOnBitmap.drawCircle(cx.toFloat(), cy.toFloat(), bubbleRadius, paint)
             }
         }
