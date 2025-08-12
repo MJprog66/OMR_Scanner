@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import com.google.gson.Gson
+import kotlinx.coroutines.launch
 import thesis.project.aww.create.OmrSheet
 import thesis.project.aww.result.ResultViewModel
 import thesis.project.aww.result.StudentResult
@@ -29,9 +30,6 @@ import thesis.project.aww.util.FileUtils
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
-import androidx.compose.runtime.rememberCoroutineScope
-import kotlinx.coroutines.launch
-
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -57,7 +55,15 @@ fun ScanScreen(navigateToResult: () -> Unit) {
     var detectedAnswers by remember { mutableStateOf<List<Char?>>(emptyList()) }
     var showNameDialog by remember { mutableStateOf(false) }
     var studentName by remember { mutableStateOf("") }
+    var sectionName by remember { mutableStateOf("") }
+    var showSectionDropdown by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    // New state to trigger section add confirmation dialog
+    var newSectionName by remember { mutableStateOf("") }
+    var showAddSectionConfirmDialog by remember { mutableStateOf(false) }
+
+    val sections by viewModel.sections.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
@@ -72,7 +78,6 @@ fun ScanScreen(navigateToResult: () -> Unit) {
         }
     )
 
-    // Show Snackbar whenever errorMessage changes
     LaunchedEffect(errorMessage) {
         errorMessage?.let { message ->
             coroutineScope.launch {
@@ -81,6 +86,7 @@ fun ScanScreen(navigateToResult: () -> Unit) {
                     withDismissAction = true
                 )
             }
+            errorMessage = null
         }
     }
 
@@ -104,6 +110,20 @@ fun ScanScreen(navigateToResult: () -> Unit) {
         })
     }
 
+    LaunchedEffect(selectedSheet) {
+        selectedSheet?.let { sheet ->
+            viewModel.setSelectedSheetTitle(sheet.title)
+            sectionName = ""
+            newSectionName = ""
+        }
+    }
+
+    LaunchedEffect(sections) {
+        if (sections.isNotEmpty() && sectionName.isBlank()) {
+            sectionName = sections[0]
+        }
+    }
+
     LaunchedEffect(previewView) {
         if (previewView != null) {
             val hasPermission = ContextCompat.checkSelfPermission(
@@ -122,19 +142,7 @@ fun ScanScreen(navigateToResult: () -> Unit) {
     }
 
     Scaffold(
-        snackbarHost = {
-            SnackbarHost(
-                hostState = snackbarHostState,
-                snackbar = { data ->
-                    Snackbar(
-                        containerColor = MaterialTheme.colorScheme.errorContainer,
-                        contentColor = MaterialTheme.colorScheme.onErrorContainer,
-                        actionColor = MaterialTheme.colorScheme.onErrorContainer,
-                        snackbarData = data
-                    )
-                }
-            )
-        }
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
     ) { paddingValues ->
         Column(
             modifier = Modifier
@@ -142,7 +150,7 @@ fun ScanScreen(navigateToResult: () -> Unit) {
                 .padding(top = 32.dp)
                 .padding(paddingValues)
         ) {
-            // Dropdown
+            // OMR Sheet selector dropdown
             Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
                 ExposedDropdownMenuBox(
                     expanded = expanded,
@@ -168,7 +176,8 @@ fun ScanScreen(navigateToResult: () -> Unit) {
 
                     ExposedDropdownMenu(
                         expanded = expanded,
-                        onDismissRequest = { expanded = false }
+                        onDismissRequest = { expanded = false },
+                        modifier = Modifier.fillMaxWidth().heightIn(max = 300.dp)
                     ) {
                         DropdownMenuItem(text = { Text("None") }, onClick = {
                             selectedSheet = null
@@ -214,7 +223,7 @@ fun ScanScreen(navigateToResult: () -> Unit) {
                     Button(
                         onClick = {
                             if (selectedSheet == null) {
-                                errorMessage = "❗Select an OMR sheet before scanning."
+                                errorMessage = "❗ Select an OMR sheet before scanning."
                             } else {
                                 errorMessage = null
                                 CameraManager.captureAndProcessImage(
@@ -255,10 +264,9 @@ fun ScanScreen(navigateToResult: () -> Unit) {
                             Text("Scan Again")
                         }
                         Button(
-                            onClick = {
-                                showNameDialog = true
-                            },
-                            modifier = Modifier.weight(1f)
+                            onClick = { showNameDialog = true },
+                            modifier = Modifier.weight(1f),
+                            enabled = selectedSheet != null
                         ) {
                             Text("Save")
                         }
@@ -271,46 +279,127 @@ fun ScanScreen(navigateToResult: () -> Unit) {
     if (showNameDialog) {
         AlertDialog(
             onDismissRequest = { showNameDialog = false },
-            confirmButton = {
-                TextButton(onClick = {
-                    if (selectedSheet == null) {
-                        errorMessage = "❗ Cannot save. No sheet selected for saving."
-                        showNameDialog = false
-                        return@TextButton
-                    }
-                    if (studentName.isBlank()) {
-                        errorMessage = "❗ Enter the student's name before saving."
-                        showNameDialog = false
-                        return@TextButton
-                    }
-
-                    val score = detectedAnswers.zip(selectedSheet!!.answerKey)
-                        .count { (given, correct) -> given == correct }
-
-                    val isPass = score >= selectedSheet!!.questionCount / 2
-                    val answersString = detectedAnswers.joinToString("") { it?.toString() ?: "-" }
-
-                    viewModel.insertResult(
-                        StudentResult(
-                            studentName = studentName,
-                            sheetTitle = selectedSheet!!.title,
-                            answers = answersString,
-                            score = score,
-                            isPass = isPass,
-                            image = FileUtils.saveBitmapToInternalStorage(
-                                context = context,
-                                bitmap = scannedBitmap!!,
-                                fileName = "${studentName}_${System.currentTimeMillis()}"
-                            ),
-                            totalQuestions = selectedSheet!!.questionCount,
-                            timestamp = System.currentTimeMillis()
-                        )
+            title = { Text("Enter Student Name and Section") },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = studentName,
+                        onValueChange = { studentName = it },
+                        label = { Text("Student Name") },
+                        modifier = Modifier.fillMaxWidth()
                     )
+                    Spacer(modifier = Modifier.height(8.dp))
 
-                    studentName = ""
-                    showNameDialog = false
-                    navigateToResult()
-                }) {
+                    ExposedDropdownMenuBox(
+                        expanded = showSectionDropdown,
+                        onExpandedChange = { showSectionDropdown = !showSectionDropdown }
+                    ) {
+                        OutlinedTextField(
+                            value = sectionName,
+                            onValueChange = { sectionName = it },
+                            label = { Text("Section") },
+                            trailingIcon = {
+                                ExposedDropdownMenuDefaults.TrailingIcon(expanded = showSectionDropdown)
+                            },
+                            modifier = Modifier.menuAnchor().fillMaxWidth()
+                        )
+                        ExposedDropdownMenu(
+                            expanded = showSectionDropdown,
+                            onDismissRequest = { showSectionDropdown = false },
+                            modifier = Modifier.fillMaxWidth().heightIn(max = 300.dp)
+                        ) {
+                            sections.forEach { section ->
+                                DropdownMenuItem(
+                                    text = { Text(section) },
+                                    onClick = {
+                                        sectionName = section
+                                        showSectionDropdown = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        OutlinedTextField(
+                            value = newSectionName,
+                            onValueChange = { newSectionName = it },
+                            label = { Text("Add New Section") },
+                            modifier = Modifier.weight(1f)
+                        )
+                        Button(
+                            onClick = {
+                                val trimmed = newSectionName.trim()
+                                if (trimmed.isNotEmpty() && selectedSheet != null) {
+                                    // Show confirmation dialog before adding
+                                    showAddSectionConfirmDialog = true
+                                }
+                            }
+                        ) {
+                            Text("Add")
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = studentName.isNotBlank() && sectionName.isNotBlank(),
+                    onClick = {
+                        if (selectedSheet == null) {
+                            errorMessage = "❗ Cannot save. No sheet selected."
+                            showNameDialog = false
+                            return@TextButton
+                        }
+
+                        val trimmedSection = sectionName.trim()
+                        val trimmedStudentName = studentName.trim()
+                        val score = detectedAnswers.zip(selectedSheet!!.answerKey)
+                            .count { (given, correct) -> given == correct }
+                        val isPass = score >= selectedSheet!!.questionCount / 2
+                        val answersString = detectedAnswers.joinToString("") { it?.toString() ?: "-" }
+
+                        val savedImagePath = FileUtils.saveBitmapToInternalStorage(
+                            context = context,
+                            bitmap = scannedBitmap!!,
+                            fileName = "${trimmedStudentName}_${System.currentTimeMillis()}"
+                        )
+
+                        viewModel.insertResult(
+                            StudentResult(
+                                studentName = trimmedStudentName,
+                                sheetTitle = selectedSheet!!.title,
+                                section = trimmedSection,
+                                answers = answersString,
+                                score = score,
+                                isPass = isPass,
+                                image = savedImagePath,
+                                totalQuestions = selectedSheet!!.questionCount,
+                                timestamp = System.currentTimeMillis()
+                            )
+                        )
+
+                        // Insert new section if not already in the list
+                        if (!sections.contains(trimmedSection)) {
+                            viewModel.insertSection(selectedSheet!!.title, trimmedSection)
+                        }
+
+                        studentName = ""
+                        sectionName = ""
+                        newSectionName = ""
+                        showNameDialog = false
+
+                        coroutineScope.launch {
+                            snackbarHostState.showSnackbar("Saved result for $trimmedStudentName")
+                        }
+
+                        navigateToResult()
+                    }
+                ) {
                     Text("Save")
                 }
             },
@@ -318,17 +407,40 @@ fun ScanScreen(navigateToResult: () -> Unit) {
                 TextButton(onClick = { showNameDialog = false }) {
                     Text("Cancel")
                 }
+            }
+        )
+    }
+
+    // Confirmation dialog for adding new section
+    if (showAddSectionConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showAddSectionConfirmDialog = false },
+            title = { Text("Add New Section") },
+            text = { Text("Are you sure you want to add section \"$newSectionName\"?") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val trimmed = newSectionName.trim()
+                        if (trimmed.isNotEmpty() && selectedSheet != null) {
+                            viewModel.insertSection(selectedSheet!!.title, trimmed)
+                            sectionName = trimmed
+                            newSectionName = ""
+                            showSectionDropdown = false
+                            coroutineScope.launch {
+                                snackbarHostState.showSnackbar("Added new section: $trimmed")
+                            }
+                        }
+                        showAddSectionConfirmDialog = false
+                    }
+                ) {
+                    Text("Yes")
+                }
             },
-            title = { Text("Enter Student Name") },
-            text = {
-                OutlinedTextField(
-                    value = studentName,
-                    onValueChange = { studentName = it },
-                    label = { Text("Student Name") },
-                    modifier = Modifier.fillMaxWidth()
-                )
+            dismissButton = {
+                TextButton(onClick = { showAddSectionConfirmDialog = false }) {
+                    Text("No")
+                }
             }
         )
     }
 }
-

@@ -1,5 +1,7 @@
 package thesis.project.aww.result
 
+import android.app.Application
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTransformGestures
@@ -8,6 +10,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
@@ -51,7 +54,7 @@ fun ResultScreen(
     val viewModel: ResultViewModel = viewModel(
         factory = viewModelFactory {
             initializer {
-                ResultViewModel(context.applicationContext as android.app.Application)
+                ResultViewModel(context.applicationContext as Application)
             }
         }
     )
@@ -60,6 +63,15 @@ fun ResultScreen(
     var selectedTitle by remember { mutableStateOf(omrSheetTitle) }
     var expanded by remember { mutableStateOf(false) }
 
+    // Sort/filter/search states
+    var selectedSortOption by remember { mutableStateOf(SortOption.DATE) }
+    var selectedFilterOption by remember { mutableStateOf(FilterOption.ALL) }
+    var searchQuery by remember { mutableStateOf("") }
+
+    // Sections expanded state (sectionName -> isExpanded)
+    val expandedSections = remember { mutableStateMapOf<String, Boolean>() }
+
+    // Dialog states
     var showDialog by remember { mutableStateOf(false) }
     var dialogImagePath by remember { mutableStateOf<String?>(null) }
 
@@ -67,10 +79,6 @@ fun ResultScreen(
     var resultToDelete by remember { mutableStateOf<StudentResult?>(null) }
 
     var showDeleteAllConfirmDialog by remember { mutableStateOf(false) }
-
-    var selectedSortOption by remember { mutableStateOf(SortOption.DATE) }
-    var selectedFilterOption by remember { mutableStateOf(FilterOption.ALL) }
-    var searchQuery by remember { mutableStateOf("") }
 
     LaunchedEffect(Unit) {
         sheetTitles = viewModel.getAllSheetTitles()
@@ -85,14 +93,18 @@ fun ResultScreen(
                 Text("Select OMR Sheet Title", style = MaterialTheme.typography.titleMedium)
                 Spacer(modifier = Modifier.height(8.dp))
 
-                Box {
-                    OutlinedButton(onClick = { expanded = true }) {
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    OutlinedButton(
+                        onClick = { expanded = true },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
                         Text("Choose Sheet Title")
                     }
 
                     DropdownMenu(
                         expanded = expanded,
-                        onDismissRequest = { expanded = false }
+                        onDismissRequest = { expanded = false },
+                        modifier = Modifier.fillMaxWidth()
                     ) {
                         sheetTitles.forEach { title ->
                             DropdownMenuItem(
@@ -101,7 +113,7 @@ fun ResultScreen(
                                     selectedTitle = title
                                     viewModel.loadResultsForTitle(title)
                                     expanded = false
-                                    searchQuery = "" // reset search on sheet change
+                                    searchQuery = ""
                                 }
                             )
                         }
@@ -112,18 +124,16 @@ fun ResultScreen(
             }
 
             selectedTitle?.let { title ->
-                val originalResults by viewModel.results.collectAsState()
+                val allResults by viewModel.results.collectAsState()
 
-                // Apply filtering (Pass/Fail/All)
-                val filteredResults = remember(originalResults, selectedFilterOption) {
+                val filteredResults = remember(allResults, selectedFilterOption) {
                     when (selectedFilterOption) {
-                        FilterOption.ALL -> originalResults
-                        FilterOption.PASS -> originalResults.filter { it.isPass }
-                        FilterOption.FAIL -> originalResults.filter { !it.isPass }
+                        FilterOption.ALL -> allResults
+                        FilterOption.PASS -> allResults.filter { it.isPass }
+                        FilterOption.FAIL -> allResults.filter { !it.isPass }
                     }
                 }
 
-                // Apply search filtering by studentName (case-insensitive)
                 val searchedResults = remember(filteredResults, searchQuery) {
                     if (searchQuery.isBlank()) filteredResults
                     else filteredResults.filter {
@@ -131,8 +141,7 @@ fun ResultScreen(
                     }
                 }
 
-                // Apply sorting
-                val results = remember(searchedResults, selectedSortOption) {
+                val sortedResults = remember(searchedResults, selectedSortOption) {
                     when (selectedSortOption) {
                         SortOption.DATE -> searchedResults.sortedByDescending { it.timestamp }
                         SortOption.NAME -> searchedResults.sortedBy { it.studentName }
@@ -140,10 +149,13 @@ fun ResultScreen(
                     }
                 }
 
+                val resultsBySection = remember(sortedResults) {
+                    sortedResults.groupBy { it.section.ifBlank { "No Section" } }
+                }
+
                 Text("Results for \"$title\"", style = MaterialTheme.typography.titleLarge)
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Search bar
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
@@ -153,13 +165,11 @@ fun ResultScreen(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Sort and Filter Row
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    // Sort dropdown
                     var sortExpanded by remember { mutableStateOf(false) }
                     OutlinedButton(onClick = { sortExpanded = true }) {
                         Text("Sort: ${selectedSortOption.label}")
@@ -179,7 +189,6 @@ fun ResultScreen(
                         }
                     }
 
-                    // Filter dropdown
                     var filterExpanded by remember { mutableStateOf(false) }
                     OutlinedButton(onClick = { filterExpanded = true }) {
                         Text("Filter: ${selectedFilterOption.label}")
@@ -202,69 +211,105 @@ fun ResultScreen(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                if (results.isEmpty()) {
+                if (sortedResults.isEmpty()) {
                     Text("No results found.")
                 } else {
                     LazyColumn {
-                        items(results) { result ->
-                            val cardColor = if (result.isPass)
-                                MaterialTheme.colorScheme.secondaryContainer
-                            else
-                                MaterialTheme.colorScheme.errorContainer
+                        resultsBySection.forEach { (section, resultsInSection) ->
+                            val isExpanded = expandedSections.getOrElse(section) { true }
 
-                            Card(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 4.dp),
-                                colors = CardDefaults.cardColors(containerColor = cardColor)
-                            ) {
-                                Column(Modifier.padding(12.dp)) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween
-                                    ) {
-                                        Column {
-                                            Text("Student: ${result.studentName}")
-                                            Text("Score: ${result.score}/${result.totalQuestions}")
+                            item {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            expandedSections[section] = !isExpanded
                                         }
-                                        IconButton(onClick = {
-                                            resultToDelete = result
-                                            showDeleteConfirmDialog = true
-                                        }) {
-                                            Icon(
-                                                imageVector = Icons.Default.Delete,
-                                                contentDescription = "Delete Result"
+                                        .background(MaterialTheme.colorScheme.primaryContainer)
+                                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    val rotation by animateFloatAsState(targetValue = if (isExpanded) 180f else 0f)
+
+                                    Icon(
+                                        imageVector = Icons.Default.ArrowDropDown,
+                                        contentDescription = if (isExpanded) "Collapse" else "Expand",
+                                        modifier = Modifier.graphicsLayer { rotationZ = rotation }
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = section,
+                                        style = MaterialTheme.typography.titleMedium
+                                    )
+                                    Spacer(modifier = Modifier.weight(1f))
+                                    Text("${resultsInSection.size} result(s)")
+                                }
+                            }
+
+                            if (isExpanded) {
+                                items(resultsInSection) { result ->
+                                    val cardColor = if (result.isPass)
+                                        MaterialTheme.colorScheme.secondaryContainer
+                                    else
+                                        MaterialTheme.colorScheme.errorContainer
+
+                                    Card(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 4.dp),
+                                        colors = CardDefaults.cardColors(containerColor = cardColor)
+                                    ) {
+                                        Column(Modifier.padding(12.dp)) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween
+                                            ) {
+                                                Column {
+                                                    Text("Student: ${result.studentName}")
+                                                    Text("Score: ${result.score}/${result.totalQuestions}")
+                                                }
+                                                IconButton(onClick = {
+                                                    resultToDelete = result
+                                                    showDeleteConfirmDialog = true
+                                                }) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Delete,
+                                                        contentDescription = "Delete Result"
+                                                    )
+                                                }
+                                            }
+
+                                            Spacer(modifier = Modifier.height(8.dp))
+
+                                            AsyncImage(
+                                                model = result.image,
+                                                contentDescription = "Scanned Sheet",
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .height(100.dp)
+                                                    .clickable {
+                                                        dialogImagePath = result.image
+                                                        showDialog = true
+                                                    },
+                                                onError = { /* optional error handling */ }
                                             )
                                         }
                                     }
-
-                                    Spacer(modifier = Modifier.height(8.dp))
-
-                                    AsyncImage(
-                                        model = result.image,
-                                        contentDescription = "Scanned Sheet",
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(100.dp)
-                                            .clickable {
-                                                dialogImagePath = result.image
-                                                showDialog = true
-                                            },
-                                        onError = { /* optional error handling */ }
-                                    )
                                 }
                             }
                         }
                     }
+                }
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
-                    Button(
-                        onClick = { showDeleteAllConfirmDialog = true },
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-                    ) {
-                        Text("Delete All Results for \"$title\"")
-                    }
+                Button(
+                    onClick = {
+                        showDeleteAllConfirmDialog = true
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Delete All Results for \"$title\"")
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -369,7 +414,6 @@ fun ResultScreen(
                     coroutineScope.launch {
                         snackbarHostState.showSnackbar("Deleted all results for \"$selectedTitle\"")
                     }
-                    // After deletion, reset selectedTitle and update sheetTitles list
                     val removedTitle = selectedTitle
                     selectedTitle = null
                     sheetTitles = sheetTitles.filterNot { it == removedTitle }
