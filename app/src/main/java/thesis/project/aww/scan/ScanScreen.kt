@@ -29,6 +29,9 @@ import thesis.project.aww.util.FileUtils
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -56,15 +59,30 @@ fun ScanScreen(navigateToResult: () -> Unit) {
     var studentName by remember { mutableStateOf("") }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
+    val snackbarHostState = remember { SnackbarHostState() }
+    val coroutineScope = rememberCoroutineScope()
+
     val cameraPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
         onResult = { granted ->
             if (!granted) {
-                errorMessage = "Camera permission denied"
+                errorMessage = "Camera permission is required to scan."
                 Log.e("ScanScreen", "❌ $errorMessage")
             }
         }
     )
+
+    // Show Snackbar whenever errorMessage changes
+    LaunchedEffect(errorMessage) {
+        errorMessage?.let { message ->
+            coroutineScope.launch {
+                snackbarHostState.showSnackbar(
+                    message = message,
+                    withDismissAction = true
+                )
+            }
+        }
+    }
 
     LaunchedEffect(Unit) {
         val hasPermission = ContextCompat.checkSelfPermission(
@@ -103,138 +121,147 @@ fun ScanScreen(navigateToResult: () -> Unit) {
         }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(top = 32.dp)
-    ) {
-        errorMessage?.let { message ->
-            Text(
-                text = message,
-                color = MaterialTheme.colorScheme.error,
-                modifier = Modifier.padding(16.dp)
+    Scaffold(
+        snackbarHost = {
+            SnackbarHost(
+                hostState = snackbarHostState,
+                snackbar = { data ->
+                    Snackbar(
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                        contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                        actionColor = MaterialTheme.colorScheme.onErrorContainer,
+                        snackbarData = data
+                    )
+                }
             )
         }
-
-        // Dropdown
-        Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
-            ExposedDropdownMenuBox(
-                expanded = expanded,
-                onExpandedChange = { expanded = !expanded }
-            ) {
-                TextField(
-                    value = selectedSheet?.title ?: "None",
-                    onValueChange = {},
-                    readOnly = true,
-                    label = { Text("Select OMR Sheet") },
-                    trailingIcon = {
-                        Row {
-                            if (selectedSheet != null) {
-                                IconButton(onClick = { selectedSheet = null }) {
-                                    Icon(Icons.Default.Close, contentDescription = "Clear")
-                                }
-                            }
-                            ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
-                        }
-                    },
-                    modifier = Modifier.menuAnchor().fillMaxWidth()
-                )
-
-                ExposedDropdownMenu(
+    ) { paddingValues ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(top = 32.dp)
+                .padding(paddingValues)
+        ) {
+            // Dropdown
+            Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+                ExposedDropdownMenuBox(
                     expanded = expanded,
-                    onDismissRequest = { expanded = false }
+                    onExpandedChange = { expanded = !expanded }
                 ) {
-                    DropdownMenuItem(text = { Text("None") }, onClick = {
-                        selectedSheet = null
-                        expanded = false
-                    })
-                    omrSheets.forEach { sheet ->
-                        DropdownMenuItem(
-                            text = { Text(sheet.title) },
-                            onClick = {
-                                selectedSheet = sheet
-                                expanded = false
+                    TextField(
+                        value = selectedSheet?.title ?: "None",
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Select OMR Sheet") },
+                        trailingIcon = {
+                            Row {
+                                if (selectedSheet != null) {
+                                    IconButton(onClick = { selectedSheet = null }) {
+                                        Icon(Icons.Default.Close, contentDescription = "Clear")
+                                    }
+                                }
+                                ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
                             }
-                        )
-                    }
-                }
-            }
-        }
+                        },
+                        modifier = Modifier.menuAnchor().fillMaxWidth()
+                    )
 
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Box(modifier = Modifier.weight(1f)) {
-            if (scannedBitmap == null) {
-                AndroidView(
-                    factory = { ctx ->
-                        PreviewView(ctx).apply {
-                            scaleType = PreviewView.ScaleType.FILL_CENTER
-                            implementationMode = PreviewView.ImplementationMode.COMPATIBLE
-                        }.also { previewView = it }
-                    },
-                    modifier = Modifier.fillMaxSize()
-                )
-            } else {
-                Image(
-                    bitmap = scannedBitmap!!.asImageBitmap(),
-                    contentDescription = "Scanned Sheet",
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
-        }
-
-        Column(modifier = Modifier.padding(16.dp)) {
-            if (scannedBitmap == null) {
-                Button(
-                    onClick = {
-                        if (selectedSheet == null) {
-                            errorMessage = "❗ Please select an OMR sheet before scanning."
-                        } else {
-                            errorMessage = null
-                            CameraManager.captureAndProcessImage(
-                                context = context,
-                                imageCapture = imageCapture,
-                                onSuccess = { warpedBitmap ->
-                                    val result = OmrBubbleDetector.detectFilledBubbles(
-                                        bitmap = warpedBitmap,
-                                        questionCount = selectedSheet!!.questionCount,
-                                        answerKey = selectedSheet!!.answerKey
-                                    )
-                                    scannedBitmap = result.debugBitmap
-                                    detectedAnswers = result.answers
-                                },
-                                onError = {
-                                    errorMessage = "❌ Scan failed. Please try again."
-                                    Log.e("ScanScreen", errorMessage!!)
+                    ExposedDropdownMenu(
+                        expanded = expanded,
+                        onDismissRequest = { expanded = false }
+                    ) {
+                        DropdownMenuItem(text = { Text("None") }, onClick = {
+                            selectedSheet = null
+                            expanded = false
+                        })
+                        omrSheets.forEach { sheet ->
+                            DropdownMenuItem(
+                                text = { Text(sheet.title) },
+                                onClick = {
+                                    selectedSheet = sheet
+                                    expanded = false
                                 }
                             )
                         }
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Scan OMR Sheet")
-                }
-            } else {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    Button(
-                        onClick = {
-                            scannedBitmap = null
-                            detectedAnswers = emptyList()
-                        },
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text("Scan Again")
                     }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Box(modifier = Modifier.weight(1f)) {
+                if (scannedBitmap == null) {
+                    AndroidView(
+                        factory = { ctx ->
+                            PreviewView(ctx).apply {
+                                scaleType = PreviewView.ScaleType.FILL_CENTER
+                                implementationMode = PreviewView.ImplementationMode.COMPATIBLE
+                            }.also { previewView = it }
+                        },
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    Image(
+                        bitmap = scannedBitmap!!.asImageBitmap(),
+                        contentDescription = "Scanned Sheet",
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+            }
+
+            Column(modifier = Modifier.padding(16.dp)) {
+                if (scannedBitmap == null) {
                     Button(
                         onClick = {
-                            showNameDialog = true
+                            if (selectedSheet == null) {
+                                errorMessage = "❗Select an OMR sheet before scanning."
+                            } else {
+                                errorMessage = null
+                                CameraManager.captureAndProcessImage(
+                                    context = context,
+                                    imageCapture = imageCapture,
+                                    onSuccess = { warpedBitmap ->
+                                        val result = OmrBubbleDetector.detectFilledBubbles(
+                                            bitmap = warpedBitmap,
+                                            questionCount = selectedSheet!!.questionCount,
+                                            answerKey = selectedSheet!!.answerKey
+                                        )
+                                        scannedBitmap = result.debugBitmap
+                                        detectedAnswers = result.answers
+                                    },
+                                    onError = {
+                                        errorMessage = "❌ Scan failed — please try again."
+                                        Log.e("ScanScreen", errorMessage!!)
+                                    }
+                                )
+                            }
                         },
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("Save")
+                        Text("Scan OMR Sheet")
+                    }
+                } else {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Button(
+                            onClick = {
+                                scannedBitmap = null
+                                detectedAnswers = emptyList()
+                            },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Scan Again")
+                        }
+                        Button(
+                            onClick = {
+                                showNameDialog = true
+                            },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Save")
+                        }
                     }
                 }
             }
@@ -247,12 +274,12 @@ fun ScanScreen(navigateToResult: () -> Unit) {
             confirmButton = {
                 TextButton(onClick = {
                     if (selectedSheet == null) {
-                        errorMessage = "❗ Cannot save. No OMR sheet selected."
+                        errorMessage = "❗ Cannot save. No sheet selected for saving."
                         showNameDialog = false
                         return@TextButton
                     }
                     if (studentName.isBlank()) {
-                        errorMessage = "❗ Student name cannot be empty."
+                        errorMessage = "❗ Enter the student's name before saving."
                         showNameDialog = false
                         return@TextButton
                     }
@@ -304,3 +331,4 @@ fun ScanScreen(navigateToResult: () -> Unit) {
         )
     }
 }
+

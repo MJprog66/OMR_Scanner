@@ -23,17 +23,14 @@ fun PortraitOMRConfigScreen(
     var title by remember { mutableStateOf("OMR Sheet") }
     var questionCount by remember { mutableIntStateOf(10) }
     var questionInput by remember { mutableStateOf("10") }
-
     val answerKey = remember { mutableStateListOf<Char>() }
 
-    // Keep answerKey in sync with question count
+    var showDuplicateDialog by remember { mutableStateOf(false) }
+
+    // Keep answerKey in sync with questionCount
     LaunchedEffect(questionCount) {
-        while (answerKey.size < questionCount) {
-            answerKey.add('A')
-        }
-        while (answerKey.size > questionCount) {
-            answerKey.removeAt(answerKey.lastIndex)
-        }
+        while (answerKey.size < questionCount) answerKey.add('A')
+        while (answerKey.size > questionCount) answerKey.removeAt(answerKey.lastIndex)
     }
 
     Column(
@@ -63,8 +60,7 @@ fun PortraitOMRConfigScreen(
                 onValueChange = {
                     if (it.length <= 3 && it.all(Char::isDigit)) {
                         questionInput = it
-                        val parsed = it.toIntOrNull()
-                        if (parsed != null && parsed in 1..100) {
+                        it.toIntOrNull()?.takeIf { num -> num in 1..100 }?.let { parsed ->
                             questionCount = parsed
                         }
                     }
@@ -93,11 +89,7 @@ fun PortraitOMRConfigScreen(
                             ) {
                                 RadioButton(
                                     selected = answerKey.getOrNull(i) == option,
-                                    onClick = {
-                                        if (i < answerKey.size) {
-                                            answerKey[i] = option
-                                        }
-                                    }
+                                    onClick = { if (i < answerKey.size) answerKey[i] = option }
                                 )
                                 Text(option.toString())
                             }
@@ -109,22 +101,26 @@ fun PortraitOMRConfigScreen(
 
         Spacer(Modifier.height(16.dp))
 
-        // 🎨 Redesigned button row
         Row(
             horizontalArrangement = Arrangement.SpaceBetween,
             modifier = Modifier.fillMaxWidth()
         ) {
-            OutlinedButton(
-                onClick = onBack,
-                modifier = Modifier.weight(1f)
-            ) {
+            OutlinedButton(onClick = onBack, modifier = Modifier.weight(1f)) {
                 Text("Back")
             }
 
             Button(
                 onClick = {
-                    saveOmrSheet(context, title, questionCount, answerKey.toList())
-                    onSave()
+                    val sanitizedTitle = title.trim().replace("\\s+".toRegex(), "_")
+                    val targetFileName = "$sanitizedTitle.omr.json"
+                    val existingFiles = context.filesDir.listFiles()?.map { it.name } ?: emptyList()
+
+                    if (existingFiles.contains(targetFileName)) {
+                        showDuplicateDialog = true
+                    } else {
+                        saveOmrSheet(context, title, questionCount, answerKey.toList())
+                        onSave()
+                    }
                 },
                 modifier = Modifier.weight(1f)
             ) {
@@ -132,15 +128,26 @@ fun PortraitOMRConfigScreen(
             }
 
             OutlinedButton(
-                onClick = {
-                    printOmrSheet(context, title, questionCount)
-                },
+                onClick = { printOmrSheet(context, title, questionCount) },
                 modifier = Modifier.weight(1f)
             ) {
                 Text("Print")
             }
         }
+    }
 
+    // Duplicate Title AlertDialog
+    if (showDuplicateDialog) {
+        AlertDialog(
+            onDismissRequest = { showDuplicateDialog = false },
+            confirmButton = {
+                TextButton(onClick = { showDuplicateDialog = false }) {
+                    Text("OK")
+                }
+            },
+            title = { Text("Duplicate Title") },
+            text = { Text("An OMR Sheet with this title already exists. Please use a different title.") }
+        )
     }
 }
 
@@ -158,25 +165,10 @@ private fun saveOmrSheet(
         )
         val gson = Gson()
         val json = gson.toJson(omrSheet)
-        val fileName = generateUniqueOmrFileName(context, title)
+        val fileName = "${title.trim().replace("\\s+".toRegex(), "_")}.omr.json"
         val file = File(context.filesDir, fileName)
         file.writeText(json)
     } catch (e: Exception) {
         e.printStackTrace()
     }
-}
-
-private fun generateUniqueOmrFileName(context: Context, baseTitle: String): String {
-    val sanitizedTitle = baseTitle.trim().replace("\\s+".toRegex(), "_")
-    var fileName = "$sanitizedTitle.omr.json"
-    var file = File(context.filesDir, fileName)
-    var counter = 1
-
-    while (file.exists()) {
-        fileName = "${sanitizedTitle}($counter).omr.json"
-        file = File(context.filesDir, fileName)
-        counter++
-    }
-
-    return fileName
 }
