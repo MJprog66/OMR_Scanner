@@ -7,9 +7,6 @@ import androidx.navigation.compose.composable
 import thesis.project.aww.create.CreateScreen
 import thesis.project.aww.result.ResultScreen
 import thesis.project.aww.scan.ScanScreen
-// In AppNavigation.kt
-import androidx.navigation.NavType
-import androidx.navigation.navArgument
 
 @Composable
 fun AppNavigation(navController: NavHostController) {
@@ -29,7 +26,7 @@ fun AppNavigation(navController: NavHostController) {
             )
         }
         composable("result") {
-            ResultScreen()  // ✅ Corrected this line
+            ResultScreen()
         }
     }
 }

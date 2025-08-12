@@ -22,5 +22,5 @@ interface SectionDAO {
     suspend fun renameSection(sheetTitle: String, oldName: String, newName: String)
 
     @Query("DELETE FROM sections WHERE sheetTitle = :sheetTitle AND name = :sectionName")
-    suspend fun deleteSection(sheetTitle: String, sectionName: String)  // <- Ensure suspend here!
+    suspend fun deleteSection(sheetTitle: String, sectionName: String)  // suspend fun!
 }

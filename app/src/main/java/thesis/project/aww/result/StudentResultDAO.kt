@@ -15,6 +15,9 @@ interface StudentResultDAO {
     @Query("SELECT * FROM student_results WHERE sheetTitle = :title ORDER BY id DESC")
     suspend fun getResultsByTitle(title: String): List<StudentResult>
 
+    @Query("SELECT * FROM student_results WHERE sheetTitle = :sheetTitle AND section = :sectionName ORDER BY id DESC")
+    suspend fun getResultsByTitleAndSection(sheetTitle: String, sectionName: String): List<StudentResult>
+
     @Delete
     suspend fun deleteResult(result: StudentResult): Int
 

@@ -27,7 +27,6 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import coil.compose.AsyncImage
 import kotlinx.coroutines.launch
-import thesis.project.aww.result.StudentResult
 
 enum class SortOption(val label: String) {
     DATE("Date"),
@@ -79,6 +78,10 @@ fun ResultScreen(
     var resultToDelete by remember { mutableStateOf<StudentResult?>(null) }
 
     var showDeleteAllConfirmDialog by remember { mutableStateOf(false) }
+
+    // New for delete section
+    var showDeleteSectionDialog by remember { mutableStateOf(false) }
+    var sectionToDelete by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
         sheetTitles = viewModel.getAllSheetTitles()
@@ -242,7 +245,23 @@ fun ResultScreen(
                                         style = MaterialTheme.typography.titleMedium
                                     )
                                     Spacer(modifier = Modifier.weight(1f))
+
                                     Text("${resultsInSection.size} result(s)")
+
+                                    Spacer(modifier = Modifier.width(8.dp))
+
+                                    // Delete section button
+                                    IconButton(
+                                        onClick = {
+                                            sectionToDelete = section
+                                            showDeleteSectionDialog = true
+                                        }
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Delete,
+                                            contentDescription = "Delete Section"
+                                        )
+                                    }
                                 }
                             }
 
@@ -396,6 +415,35 @@ fun ResultScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteConfirmDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // Delete Section Confirmation Dialog
+    if (showDeleteSectionDialog && sectionToDelete != null && selectedTitle != null) {
+        AlertDialog(
+            onDismissRequest = { showDeleteSectionDialog = false },
+            title = { Text("Confirm Delete Section") },
+            text = { Text("Are you sure you want to delete all results in section \"$sectionToDelete\"?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.deleteResultsForSection(selectedTitle!!, sectionToDelete!!)
+                    coroutineScope.launch {
+                        snackbarHostState.showSnackbar("Deleted section \"$sectionToDelete\"")
+                    }
+                    showDeleteSectionDialog = false
+                    sectionToDelete = null
+                }) {
+                    Text("Delete")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showDeleteSectionDialog = false
+                    sectionToDelete = null
+                }) {
                     Text("Cancel")
                 }
             }

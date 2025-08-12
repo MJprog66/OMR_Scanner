@@ -117,13 +117,35 @@ class ResultViewModel(application: Application) : AndroidViewModel(application) 
 
     fun deleteSection(sheetTitle: String, sectionName: String) {
         viewModelScope.launch(Dispatchers.IO) {
+            // Delete the section from sections table
             sectionDao.deleteSection(sheetTitle, sectionName)
+            // Clear the section name from all results with this section
             dao.clearSectionName(sheetTitle, sectionName)
             // Reload results to reflect changes
             loadResultsForTitleSuspended(sheetTitle)
         }
     }
 
+    /**
+     * Deletes all student results under a specific section, including their images,
+     * and reloads the results afterward.
+     */
+    fun deleteResultsForSection(sheetTitle: String, sectionName: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val resultsInSection = dao.getResultsByTitleAndSection(sheetTitle, sectionName)
+            resultsInSection.forEach {
+                try {
+                    File(it.image).takeIf { file -> file.exists() }?.delete()
+                } catch (_: Exception) {}
+            }
+            dao.deleteResultsBySection(sheetTitle, sectionName)
+            loadResultsForTitleSuspended(sheetTitle)
+        }
+    }
+
+    /**
+     * Returns a map grouping the results by their section names (or "No Section" if blank).
+     */
     fun getResultsGroupedBySection(sheetTitle: String): Map<String, List<StudentResult>> {
         val filteredResults = _results.value.filter { it.sheetTitle == sheetTitle }
         return filteredResults.groupBy { it.section.ifBlank { "No Section" } }
