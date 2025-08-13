@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Dark mode colors -->
+    <color name="blue_200">#5A6BE0</color>         <!-- lighter blue for dark mode -->
+    <color name="blue_700">#00023A</color>         <!-- very dark blue -->
+    <color name="teal_200">#00B3A4</color>         <!-- muted teal -->
+    <color name="teal_700">#008F7E</color>         <!-- darker teal -->
+
+    <!-- Background and text -->
+    <color name="background">#FF121212</color>      <!-- dark background -->
+    <color name="surface">#FF1E1E1E</color>         <!-- surface color (cards, sheets) -->
+    <color name="on_background">#FFE0E0E0</color>   <!-- text on background -->
+    <color name="on_surface">#FFE0E0E0</color>      <!-- text on surface -->
+
+    <!-- Text colors -->
+    <color name="black">#FF121212</color>           <!-- very dark for text in light mode -->
+    <color name="white">#FFE0E0E0</color>           <!-- light text color for dark mode -->
+</resources>

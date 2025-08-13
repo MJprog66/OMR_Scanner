@@ -6,6 +6,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.navigation.compose.rememberNavController
 import org.opencv.android.OpenCVLoader
+import thesis.project.aww.ui.theme.ThemeAww  // Import your theme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -19,8 +20,10 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            val navController = rememberNavController()
-            AppNavigation(navController)
+            ThemeAww {  // Wrap content with your Compose MaterialTheme
+                val navController = rememberNavController()
+                AppNavigation(navController)
+            }
         }
     }
 }

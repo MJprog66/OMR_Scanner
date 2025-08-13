@@ -1,10 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="purple_200">#FFBB86FC</color>
-    <color name="purple_500">#FF6200EE</color>
-    <color name="purple_700">#FF3700B3</color>
-    <color name="teal_200">#FF03DAC5</color>
-    <color name="teal_700">#FF018786</color>
-    <color name="black">#FF000000</color>
-    <color name="white">#FFFFFFFF</color>
+    <!-- Light mode colors -->
+    <color name="blue_200">#7A8DF4</color>       <!-- Light blue -->
+    <color name="blue_700">#010850</color>       <!-- Dark blue -->
+    <color name="teal_200">#FF03DAC5</color>     <!-- Light teal -->
+    <color name="teal_700">#FF018786</color>     <!-- Dark teal -->
+
+    <color name="black">#FF000000</color>        <!-- Black -->
+    <color name="white">#FFFFFFFF</color>        <!-- White -->
+
+    <!-- Background and surface -->
+    <color name="background">#FFFFFFFF</color>   <!-- White background -->
+    <color name="surface">#FFFFFFFF</color>      <!-- Surface color (cards, sheets) -->
+
+    <!-- Text on background and surfaces -->
+    <color name="on_background">#FF000000</color> <!-- Black text -->
+    <color name="on_surface">#FF000000</color>    <!-- Black text -->
 </resources>
