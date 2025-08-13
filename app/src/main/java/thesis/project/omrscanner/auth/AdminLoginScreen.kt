@@ -114,8 +114,7 @@ fun AdminLoginScreen(navController: NavHostController) {
                             isLoading = false
                             val message = when (it) {
                                 is FirebaseAuthInvalidUserException -> "No account found with this email."
-                                is FirebaseAuthInvalidCredentialsException -> "Incorrect password."
-                                else -> "Login failed: ${it.message}"
+                                else -> "Login failed. Please check your network or ensure your email and password are correct"
                             }
                             scope.launch { snackbarHostState.showSnackbar(message) }
                         }
