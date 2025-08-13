@@ -2,15 +2,16 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.compose.compiler)
+    alias(libs.plugins.google.services)
     kotlin("kapt")
 }
 
 android {
-    namespace = "thesis.project.aww"
+    namespace = "thesis.project.omrscanner"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "thesis.project.aww"
+        applicationId = "thesis.project.omrscanner"
         minSdk = 24
         targetSdk = 35
         versionCode = 1
@@ -51,8 +52,21 @@ dependencies {
     implementation("androidx.room:room-runtime:2.6.1")
     implementation("androidx.room:room-ktx:2.6.1")
     kapt("androidx.room:room-compiler:2.6.1")
+    }
 
-}
+dependencies {
+    // Import the Firebase BoM (Bill of Materials)
+    implementation(platform("com.google.firebase:firebase-bom:32.1.1"))
+
+    // Add the Firebase Authentication and Firestore libraries
+    implementation("com.google.firebase:firebase-auth-ktx")
+    implementation("com.google.firebase:firebase-firestore-ktx")
+    implementation("androidx.navigation:navigation-compose:2.5.3")
+    implementation("androidx.compose.material:material:1.4.3")
+    implementation("androidx.compose.material:material-icons-extended:<compose_version>")
+    implementation("androidx.compose.ui:ui:1.4.3")
+    implementation("androidx.compose.ui:ui-tooling-preview:1.4.3")
+    }
 
 dependencies {
     // Jetpack Compose core
@@ -105,5 +119,6 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.9.0")  // Lifecycle-aware coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
-    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.6.1") // or latest
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.6.1")
 }

@@ -19,7 +19,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Aww"
+rootProject.name = "OMR Scanner"
 include(":app")
 include(":sdk")
 project(":sdk").projectDir = File(rootDir, "OpenCV-android-sdk/sdk/")

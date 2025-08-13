@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "214921159835",
+    "project_id": "omr-scanner-19e21",
+    "storage_bucket": "omr-scanner-19e21.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:214921159835:android:c8517d675363f827cdd23e",
+        "android_client_info": {
+          "package_name": "thesis.project.omrscanner"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBz5N-0FeE_-gjMtgbppLJerAb4zdZSLiM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
