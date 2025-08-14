@@ -1,101 +1,128 @@
 package thesis.project.omrscanner.auth
 
-import android.widget.Toast
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.navigation.NavController
+import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SignupRequestScreen(navController: NavController) {
-    val context = LocalContext.current
+fun SignupRequestScreen(
+    onBack: () -> Unit
+) {
+    val authViewModel: AuthViewModel = viewModel()
     val scope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
 
     var name by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var showPassword by remember { mutableStateOf(false) }
     var loading by remember { mutableStateOf(false) }
-    val snackbarHostState = remember { SnackbarHostState() }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .padding(24.dp)
-    ) {
+    Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) }
+    ) { padding ->
         Column(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
         ) {
             Text(
-                text = "User Signup Request",
-                color = MaterialTheme.colorScheme.primary,
-                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold)
+                text = "Signup Request",
+                style = MaterialTheme.typography.headlineMedium
             )
 
             Spacer(modifier = Modifier.height(24.dp))
 
+            // Full Name
             OutlinedTextField(
                 value = name,
                 onValueChange = { name = it },
                 label = { Text("Full Name") },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                singleLine = true
+                modifier = Modifier.fillMaxWidth()
             )
 
             Spacer(modifier = Modifier.height(16.dp))
 
+            // Email
             OutlinedTextField(
                 value = email,
                 onValueChange = { email = it },
                 label = { Text("Email") },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                singleLine = true
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Password
+            OutlinedTextField(
+                value = password,
+                onValueChange = { password = it },
+                label = { Text("Password") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
+                trailingIcon = {
+                    IconButton(onClick = { showPassword = !showPassword }) {
+                        Icon(
+                            imageVector = if (showPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                            contentDescription = if (showPassword) "Hide password" else "Show password"
+                        )
+                    }
+                },
+                modifier = Modifier.fillMaxWidth()
             )
 
             Spacer(modifier = Modifier.height(24.dp))
 
+            // Submit Button
             Button(
                 onClick = {
-                    if (name.isBlank() || email.isBlank()) {
-                        scope.launch { snackbarHostState.showSnackbar("Please fill in all fields.") }
+                    if (name.isBlank() || email.isBlank() || password.isBlank()) {
+                        scope.launch {
+                            snackbarHostState.showSnackbar("Please fill in all fields.")
+                        }
                         return@Button
                     }
 
                     loading = true
                     scope.launch {
-                        AuthRepository.submitSignupRequest(email, name) { success, error ->
+                        authViewModel.submitSignupRequest(
+                            password = password,
+                            email = email,
+                            name = name
+                        ) { success, msg ->
                             loading = false
                             scope.launch {
-                                snackbarHostState.showSnackbar(
-                                    if (success) {
-                                        name = ""
-                                        email = ""
-                                        "Signup request submitted! Waiting for admin approval."
-                                    } else {
-                                        "Error: $error"
-                                    }
-                                )
+                                snackbarHostState.showSnackbar(msg ?: "Something went wrong")
+                            }
+                            if (success) {
+                                // Reset fields after successful submission
+                                name = ""
+                                email = ""
+                                password = ""
+                                onBack()
                             }
                         }
                     }
                 },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(50.dp),
-                shape = RoundedCornerShape(12.dp),
-                enabled = !loading,
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !loading
             ) {
                 if (loading) {
                     CircularProgressIndicator(
@@ -104,30 +131,19 @@ fun SignupRequestScreen(navController: NavController) {
                         modifier = Modifier.size(20.dp)
                     )
                 } else {
-                    Text("Submit Signup Request", color = MaterialTheme.colorScheme.onPrimary)
+                    Text("Submit Request")
                 }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+            // Back button
+            OutlinedButton(
+                onClick = onBack,
+                modifier = Modifier.fillMaxWidth()
             ) {
-                TextButton(onClick = { navController.navigate("admin_login") }) {
-                    Text("Admin Login", color = MaterialTheme.colorScheme.primary)
-                }
-                TextButton(onClick = { navController.navigate("user_login") }) {
-                    Text("User Login", color = MaterialTheme.colorScheme.primary)
-                }
+                Text("Back")
             }
         }
-
-        SnackbarHost(
-            hostState = snackbarHostState,
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .padding(16.dp)
-        )
     }
 }

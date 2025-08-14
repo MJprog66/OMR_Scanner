@@ -16,7 +16,6 @@ fun AppNavigation(navController: NavHostController) {
     val context = LocalContext.current
     val prefs = context.getSharedPreferences("user_prefs", Context.MODE_PRIVATE)
 
-    // Start destination is initially null until we check preferences
     var startDestination by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
@@ -25,19 +24,47 @@ fun AppNavigation(navController: NavHostController) {
 
         startDestination = when {
             isAdmin -> "admin"
-            email.isNotBlank() -> "user_login" // User login if email exists
-            else -> "user_login" // Default to user login
+            email.isNotBlank() -> "user_login"
+            else -> "user_login"
         }
     }
 
-    // Only render NavHost when startDestination is ready
     startDestination?.let { start ->
         NavHost(navController = navController, startDestination = start) {
 
-            composable("user_login") { UserLoginScreen(navController) }
-            composable("signup_request") { SignupRequestScreen(navController) }
-            composable("admin_login") { AdminLoginScreen(navController) }
-            composable("admin") { AdminScreen(navController) }
+            // User login
+            composable("user_login") {
+                UserLoginScreen(
+                    onLoginSuccess = { navController.navigate("menu") },
+                    onNavigateToSignup = { navController.navigate("signup_request") },
+                    onNavigateToAdminLogin = { navController.navigate("admin_login") }
+                )
+            }
+
+            // Signup request
+            composable("signup_request") {
+                SignupRequestScreen(
+                    onBack = { navController.popBackStack() }
+                )
+            }
+
+            // Admin login
+            composable("admin_login") {
+                AdminLoginScreen(
+                    onLoginSuccess = { navController.navigate("admin") },
+                    onNavigateToSignup = { navController.navigate("signup_request") },
+                    onNavigateToUserLogin = { navController.navigate("user_login") }
+                )
+            }
+
+            // Admin pending requests screen
+            composable("admin") {
+                AdminScreen(
+                    onBack = { navController.popBackStack() }
+                )
+            }
+
+            // Existing screens remain unchanged
             composable("menu") { MainMenu(navController) }
             composable("create") { CreateScreen(navController) }
             composable("scan") { ScanScreen(navigateToResult = { navController.navigate("result") }) }

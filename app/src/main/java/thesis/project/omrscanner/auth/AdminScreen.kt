@@ -1,40 +1,52 @@
 package thesis.project.omrscanner.auth
 
-import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.navigation.NavController
-import com.google.firebase.firestore.FirebaseFirestore
+import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AdminScreen(navController: NavController) {
-    val db = FirebaseFirestore.getInstance()
-    var signupRequests by remember { mutableStateOf(listOf<Map<String, Any>>()) }
-    val context = LocalContext.current
+fun AdminScreen(
+    onBack: () -> Unit
+) {
+    val authViewModel: AuthViewModel = viewModel()
     val scope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
 
-    // Listen to pending signup requests
+    var requests by remember { mutableStateOf(listOf<AppUser>()) }
+    var showDialog by remember { mutableStateOf(false) }
+    var approvedUser by remember { mutableStateOf<AppUser?>(null) }
+
+    // Load pending signup requests
     LaunchedEffect(Unit) {
-        db.collection("signup_requests")
-            .addSnapshotListener { snapshot, error ->
-                if (error != null) return@addSnapshotListener
-                signupRequests = snapshot?.documents?.map { it.data!! } ?: emptyList()
-            }
+        authViewModel.getPendingRequests { list ->
+            requests = list
+        }
     }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Pending Signup Requests") }) }
+        topBar = {
+            TopAppBar(
+                title = { Text("Pending Signup Requests") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                    }
+                }
+            )
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { paddingValues ->
         Box(
             modifier = Modifier
@@ -43,12 +55,8 @@ fun AdminScreen(navController: NavController) {
                 .padding(paddingValues),
             contentAlignment = Alignment.Center
         ) {
-            if (signupRequests.isEmpty()) {
-                Text(
-                    "No pending requests",
-                    color = MaterialTheme.colorScheme.onBackground,
-                    style = MaterialTheme.typography.bodyLarge
-                )
+            if (requests.isEmpty()) {
+                Text("No pending requests", style = MaterialTheme.typography.bodyLarge)
             } else {
                 LazyColumn(
                     modifier = Modifier
@@ -57,10 +65,7 @@ fun AdminScreen(navController: NavController) {
                     contentPadding = PaddingValues(vertical = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    items(signupRequests) { request ->
-                        val email = request["email"] as? String ?: ""
-                        val name = request["name"] as? String ?: ""
-
+                    items(requests) { user ->
                         Card(
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(12.dp),
@@ -73,15 +78,28 @@ fun AdminScreen(navController: NavController) {
                                     .fillMaxWidth(),
                                 verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Text("Name: $name", style = MaterialTheme.typography.bodyLarge)
-                                Text("Email: $email", style = MaterialTheme.typography.bodyMedium)
+                                Text("Name: ${user.name}", style = MaterialTheme.typography.bodyLarge)
+                                Text("Email: ${user.email}", style = MaterialTheme.typography.bodyMedium)
 
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.spacedBy(16.dp)
                                 ) {
+                                    // Approve button
                                     Button(
-                                        onClick = { approveRequest(db, email, name, context) },
+                                        onClick = {
+                                            scope.launch {
+                                                authViewModel.approveRequest(user) {
+                                                    approvedUser = user
+                                                    showDialog = true
+                                                    // Refresh the list
+                                                    authViewModel.getPendingRequests { updated ->
+                                                        requests = updated
+                                                    }
+                                                }
+                                                snackbarHostState.showSnackbar("User ${user.email} approved")
+                                            }
+                                        },
                                         modifier = Modifier.weight(1f),
                                         shape = RoundedCornerShape(12.dp),
                                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
@@ -89,8 +107,18 @@ fun AdminScreen(navController: NavController) {
                                         Text("Approve", color = MaterialTheme.colorScheme.onPrimary)
                                     }
 
+                                    // Deny button
                                     Button(
-                                        onClick = { denyRequest(db, email, context) },
+                                        onClick = {
+                                            scope.launch {
+                                                authViewModel.deleteUser(user) {
+                                                    authViewModel.getPendingRequests { updated ->
+                                                        requests = updated
+                                                    }
+                                                }
+                                                snackbarHostState.showSnackbar("Request denied for ${user.email}")
+                                            }
+                                        },
                                         modifier = Modifier.weight(1f),
                                         shape = RoundedCornerShape(12.dp),
                                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
@@ -105,41 +133,18 @@ fun AdminScreen(navController: NavController) {
             }
         }
     }
-}
 
-private fun approveRequest(
-    db: FirebaseFirestore,
-    email: String,
-    name: String,
-    context: android.content.Context
-) {
-    val requestRef = db.collection("signup_requests").document(email)
-    val allowedRef = db.collection("allowed_users").document(email)
-
-    val userData = hashMapOf(
-        "email" to email,
-        "name" to name,
-        "role" to "user",
-        "isAdmin" to false
-    )
-
-    allowedRef.set(userData)
-        .addOnSuccessListener {
-            requestRef.delete()
-            Toast.makeText(context, "$email approved and added to allowed users!", Toast.LENGTH_SHORT).show()
-        }
-        .addOnFailureListener {
-            Toast.makeText(context, "Failed to approve $email", Toast.LENGTH_SHORT).show()
-        }
-}
-
-private fun denyRequest(db: FirebaseFirestore, email: String, context: android.content.Context) {
-    db.collection("signup_requests").document(email)
-        .delete()
-        .addOnSuccessListener {
-            Toast.makeText(context, "$email denied!", Toast.LENGTH_SHORT).show()
-        }
-        .addOnFailureListener {
-            Toast.makeText(context, "Failed to deny $email", Toast.LENGTH_SHORT).show()
-        }
+    // Approval dialog
+    if (showDialog && approvedUser != null) {
+        AlertDialog(
+            onDismissRequest = { showDialog = false },
+            title = { Text("User Approved") },
+            text = { Text("User ${approvedUser!!.email} has been approved!") },
+            confirmButton = {
+                TextButton(onClick = { showDialog = false }) {
+                    Text("OK")
+                }
+            }
+        )
+    }
 }
