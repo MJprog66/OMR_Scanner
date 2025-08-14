@@ -4,7 +4,6 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
-import androidx.room.RoomDatabase.Callback
 import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -14,7 +13,7 @@ import thesis.project.omrscanner.auth.UserDao
 
 @Database(
     entities = [AppUser::class],
-    version = 2,  // incremented to prevent Room crash
+    version = 2, // increment version if schema changed
     exportSchema = false
 )
 abstract class UserDatabase : RoomDatabase() {
@@ -32,7 +31,7 @@ abstract class UserDatabase : RoomDatabase() {
                     UserDatabase::class.java,
                     "user_database"
                 )
-                    .fallbackToDestructiveMigration() // reset DB if version changes
+                    .fallbackToDestructiveMigration() // reset DB on version change
                     .addCallback(UserDatabaseCallback(context))
                     .build()
                 INSTANCE = instance
@@ -43,19 +42,30 @@ abstract class UserDatabase : RoomDatabase() {
 
     private class UserDatabaseCallback(
         private val context: Context
-    ) : Callback() {
+    ) : RoomDatabase.Callback() {
 
         override fun onCreate(db: SupportSQLiteDatabase) {
             super.onCreate(db)
-            // Pre-insert admin user
             CoroutineScope(Dispatchers.IO).launch {
-                val adminUser = AppUser(
-                    email = "admin@omrscanner.com",
-                    password = "admin123",  // change to secure password
-                    name = "Administrator",
-                    role = "admin"
-                )
-                getInstance(context).userDao().insert(adminUser)
+                val userDao = getInstance(context).userDao()
+
+                // Ensure admin exists and is approved
+                val adminEmail = "omrscannerapp@gmail.com"
+                val existingAdmin = userDao.getUserByEmail(adminEmail)
+                if (existingAdmin == null) {
+                    // Insert new admin
+                    val adminUser = AppUser(
+                        email = adminEmail,
+                        password = "admin123",
+                        name = "Administrator",
+                        role = "admin",
+                        isApproved = true
+                    )
+                    userDao.insert(adminUser)
+                } else if (!existingAdmin.isApproved) {
+                    // Update existing admin to be approved
+                    userDao.update(existingAdmin.copy(isApproved = true))
+                }
             }
         }
     }

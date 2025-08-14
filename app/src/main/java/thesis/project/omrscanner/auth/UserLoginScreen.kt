@@ -1,5 +1,6 @@
 package thesis.project.omrscanner.auth
 
+import android.content.Context
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -9,11 +10,13 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -24,6 +27,7 @@ fun UserLoginScreen(
     onNavigateToAdminLogin: () -> Unit
 ) {
     val authViewModel: AuthViewModel = viewModel()
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -32,9 +36,15 @@ fun UserLoginScreen(
     var showPassword by remember { mutableStateOf(false) }
     var isLoading by remember { mutableStateOf(false) }
 
-    Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) }
-    ) { padding ->
+    // Auto-login if user already logged in
+    LaunchedEffect(Unit) {
+        val savedEmail = AuthDataStore.getUserEmail(context).first()
+        if (!savedEmail.isNullOrBlank()) {
+            onLoginSuccess()
+        }
+    }
+
+    Scaffold(snackbarHost = { SnackbarHost(snackbarHostState) }) { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -44,10 +54,8 @@ fun UserLoginScreen(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text("User Login", style = MaterialTheme.typography.headlineMedium)
-
             Spacer(Modifier.height(24.dp))
 
-            // Email input
             OutlinedTextField(
                 value = email,
                 onValueChange = { email = it },
@@ -55,10 +63,8 @@ fun UserLoginScreen(
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
                 modifier = Modifier.fillMaxWidth()
             )
-
             Spacer(Modifier.height(16.dp))
 
-            // Password input
             OutlinedTextField(
                 value = password,
                 onValueChange = { password = it },
@@ -75,28 +81,25 @@ fun UserLoginScreen(
                 },
                 modifier = Modifier.fillMaxWidth()
             )
-
             Spacer(Modifier.height(24.dp))
 
-            // Login button
             Button(
                 onClick = {
                     if (email.isBlank() || password.isBlank()) {
                         scope.launch { snackbarHostState.showSnackbar("Enter email and password") }
                         return@Button
                     }
+
                     isLoading = true
                     scope.launch {
-                        authViewModel.login(email.trim(), password) { success, roleOrMsg ->
-                            isLoading = false
-                            scope.launch {
-                                if (success && roleOrMsg == "user") {
-                                    snackbarHostState.showSnackbar("Login successful!")
-                                    onLoginSuccess()
-                                } else {
-                                    snackbarHostState.showSnackbar(roleOrMsg ?: "Login failed")
-                                }
-                            }
+                        // Call suspend login function
+                        val (success, roleOrMsg) = authViewModel.login(email.trim(), password, context)
+                        isLoading = false
+                        if (success && roleOrMsg == "user") {
+                            snackbarHostState.showSnackbar("Login successful!")
+                            onLoginSuccess()
+                        } else {
+                            snackbarHostState.showSnackbar(roleOrMsg ?: "Login failed")
                         }
                     }
                 },
@@ -116,7 +119,6 @@ fun UserLoginScreen(
 
             Spacer(Modifier.height(16.dp))
 
-            // Navigation buttons
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween

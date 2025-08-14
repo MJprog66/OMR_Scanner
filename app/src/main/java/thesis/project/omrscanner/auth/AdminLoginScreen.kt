@@ -9,6 +9,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -26,15 +27,14 @@ fun AdminLoginScreen(
     val authViewModel: AuthViewModel = viewModel()
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
+    val context = LocalContext.current
 
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var showPassword by remember { mutableStateOf(false) }
     var isLoading by remember { mutableStateOf(false) }
 
-    Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) }
-    ) { padding ->
+    Scaffold(snackbarHost = { SnackbarHost(snackbarHostState) }) { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -44,7 +44,6 @@ fun AdminLoginScreen(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text("Admin Login", style = MaterialTheme.typography.headlineMedium)
-
             Spacer(Modifier.height(24.dp))
 
             // Email input
@@ -55,7 +54,6 @@ fun AdminLoginScreen(
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
                 modifier = Modifier.fillMaxWidth()
             )
-
             Spacer(Modifier.height(16.dp))
 
             // Password input
@@ -75,7 +73,6 @@ fun AdminLoginScreen(
                 },
                 modifier = Modifier.fillMaxWidth()
             )
-
             Spacer(Modifier.height(24.dp))
 
             // Login button
@@ -87,16 +84,14 @@ fun AdminLoginScreen(
                     }
                     isLoading = true
                     scope.launch {
-                        authViewModel.login(email.trim(), password) { success, roleOrMsg ->
-                            isLoading = false
-                            scope.launch {
-                                if (success && roleOrMsg == "admin") {
-                                    snackbarHostState.showSnackbar("Admin login successful!")
-                                    onLoginSuccess()
-                                } else {
-                                    snackbarHostState.showSnackbar(roleOrMsg ?: "Login failed")
-                                }
-                            }
+                        // Use existing AuthViewModel login function
+                        val (success, roleOrMsg) = authViewModel.login(email.trim(), password, context)
+                        isLoading = false
+                        if (success && roleOrMsg == "admin") {
+                            snackbarHostState.showSnackbar("Admin login successful!")
+                            onLoginSuccess()
+                        } else {
+                            snackbarHostState.showSnackbar(roleOrMsg ?: "Login failed")
                         }
                     }
                 },

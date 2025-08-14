@@ -1,32 +1,28 @@
 package thesis.project.omrscanner.main
 
-import android.content.Context
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import kotlinx.coroutines.launch
 import thesis.project.omrscanner.auth.*
 import thesis.project.omrscanner.create.CreateScreen
-import thesis.project.omrscanner.result.ResultScreen
 import thesis.project.omrscanner.scan.ScanScreen
+import thesis.project.omrscanner.result.ResultScreen
 
 @Composable
-fun AppNavigation(navController: NavHostController) {
+fun AppNavigation(navController: NavHostController, authViewModel: AuthViewModel = androidx.lifecycle.viewmodel.compose.viewModel()) {
     val context = LocalContext.current
-    val prefs = context.getSharedPreferences("user_prefs", Context.MODE_PRIVATE)
+    val scope = rememberCoroutineScope()
 
+    // Holds the start destination
     var startDestination by remember { mutableStateOf<String?>(null) }
 
+    // Load admin login state from DataStore
     LaunchedEffect(Unit) {
-        val email = prefs.getString("email", "") ?: ""
-        val isAdmin = prefs.getBoolean("isAdmin", false)
-
-        startDestination = when {
-            isAdmin -> "admin"
-            email.isNotBlank() -> "user_login"
-            else -> "user_login"
-        }
+        val isAdmin = authViewModel.isAdminLoggedIn(context)
+        startDestination = if (isAdmin) "admin" else "user_login"
     }
 
     startDestination?.let { start ->
@@ -41,33 +37,57 @@ fun AppNavigation(navController: NavHostController) {
                 )
             }
 
-            // Signup request
+            // Signup request screen
             composable("signup_request") {
                 SignupRequestScreen(
-                    onBack = { navController.popBackStack() }
+                    onBack = { navController.popBackStack() },
+                    onNavigateToAdminLogin = { navController.navigate("admin_login") },
+                    onNavigateToUserLogin = { navController.navigate("user_login") }
                 )
             }
 
             // Admin login
             composable("admin_login") {
                 AdminLoginScreen(
-                    onLoginSuccess = { navController.navigate("admin") },
+                    onLoginSuccess = {
+                        // Persist admin login in DataStore
+                        scope.launch {
+                            authViewModel.adminLoggedIn(context)
+                        }
+                        navController.navigate("admin") {
+                            popUpTo("admin_login") { inclusive = true }
+                        }
+                    },
                     onNavigateToSignup = { navController.navigate("signup_request") },
                     onNavigateToUserLogin = { navController.navigate("user_login") }
                 )
             }
 
-            // Admin pending requests screen
+            // Admin dashboard
             composable("admin") {
                 AdminScreen(
-                    onBack = { navController.popBackStack() }
+                    onLogout = {
+                        // Clear DataStore login
+                        scope.launch {
+                            authViewModel.adminLoggedOut(context)
+                            navController.navigate("admin_login") {
+                                popUpTo("admin") { inclusive = true }
+                            }
+                        }
+                    }
                 )
             }
 
-            // Existing screens remain unchanged
+            // Main menu
             composable("menu") { MainMenu(navController) }
+
+            // Create screen
             composable("create") { CreateScreen(navController) }
+
+            // Scan screen
             composable("scan") { ScanScreen(navigateToResult = { navController.navigate("result") }) }
+
+            // Result screen
             composable("result") { ResultScreen() }
         }
     }

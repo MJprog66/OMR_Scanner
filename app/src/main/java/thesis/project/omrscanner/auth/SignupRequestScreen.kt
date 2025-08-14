@@ -19,7 +19,9 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SignupRequestScreen(
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onNavigateToAdminLogin: () -> Unit,
+    onNavigateToUserLogin: () -> Unit
 ) {
     val authViewModel: AuthViewModel = viewModel()
     val scope = rememberCoroutineScope()
@@ -31,9 +33,7 @@ fun SignupRequestScreen(
     var showPassword by remember { mutableStateOf(false) }
     var loading by remember { mutableStateOf(false) }
 
-    Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) }
-    ) { padding ->
+    Scaffold(snackbarHost = { SnackbarHost(snackbarHostState) }) { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -42,24 +42,17 @@ fun SignupRequestScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            Text(
-                text = "Signup Request",
-                style = MaterialTheme.typography.headlineMedium
-            )
+            Text("Signup Request", style = MaterialTheme.typography.headlineMedium)
+            Spacer(Modifier.height(24.dp))
 
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // Full Name
             OutlinedTextField(
                 value = name,
                 onValueChange = { name = it },
                 label = { Text("Full Name") },
                 modifier = Modifier.fillMaxWidth()
             )
+            Spacer(Modifier.height(16.dp))
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Email
             OutlinedTextField(
                 value = email,
                 onValueChange = { email = it },
@@ -67,10 +60,8 @@ fun SignupRequestScreen(
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
                 modifier = Modifier.fillMaxWidth()
             )
+            Spacer(Modifier.height(16.dp))
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Password
             OutlinedTextField(
                 value = password,
                 onValueChange = { password = it },
@@ -87,37 +78,28 @@ fun SignupRequestScreen(
                 },
                 modifier = Modifier.fillMaxWidth()
             )
+            Spacer(Modifier.height(24.dp))
 
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // Submit Button
             Button(
                 onClick = {
                     if (name.isBlank() || email.isBlank() || password.isBlank()) {
-                        scope.launch {
-                            snackbarHostState.showSnackbar("Please fill in all fields.")
-                        }
+                        scope.launch { snackbarHostState.showSnackbar("Please fill in all fields.") }
                         return@Button
                     }
-
                     loading = true
                     scope.launch {
-                        authViewModel.submitSignupRequest(
+                        val (success, msg) = authViewModel.submitSignupRequest(
                             password = password,
                             email = email,
                             name = name
-                        ) { success, msg ->
-                            loading = false
-                            scope.launch {
-                                snackbarHostState.showSnackbar(msg ?: "Something went wrong")
-                            }
-                            if (success) {
-                                // Reset fields after successful submission
-                                name = ""
-                                email = ""
-                                password = ""
-                                onBack()
-                            }
+                        )
+                        loading = false
+                        scope.launch { snackbarHostState.showSnackbar(msg) }
+                        if (success) {
+                            name = ""
+                            email = ""
+                            password = ""
+                            onBack()
                         }
                     }
                 },
@@ -135,14 +117,14 @@ fun SignupRequestScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(Modifier.height(16.dp))
 
-            // Back button
-            OutlinedButton(
-                onClick = onBack,
-                modifier = Modifier.fillMaxWidth()
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text("Back")
+                TextButton(onClick = onNavigateToAdminLogin) { Text("Admin Login") }
+                TextButton(onClick = onNavigateToUserLogin) { Text("User Login") }
             }
         }
     }

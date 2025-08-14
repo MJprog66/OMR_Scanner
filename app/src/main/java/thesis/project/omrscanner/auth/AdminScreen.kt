@@ -1,16 +1,19 @@
 package thesis.project.omrscanner.auth
 
+import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.launch
@@ -18,113 +21,153 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AdminScreen(
-    onBack: () -> Unit
+    onLogout: () -> Unit
 ) {
+    val context = LocalContext.current
     val authViewModel: AuthViewModel = viewModel()
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
-    var requests by remember { mutableStateOf(listOf<AppUser>()) }
-    var showDialog by remember { mutableStateOf(false) }
-    var approvedUser by remember { mutableStateOf<AppUser?>(null) }
+    var pendingUsers by remember { mutableStateOf(listOf<AppUser>()) }
+    var approvedUsers by remember { mutableStateOf(listOf<AppUser>()) }
+    var searchQuery by remember { mutableStateOf("") }
 
-    // Load pending signup requests
+    // Load lists on start
     LaunchedEffect(Unit) {
-        authViewModel.getPendingRequests { list ->
-            requests = list
+        pendingUsers = authViewModel.getPendingRequests()
+        approvedUsers = authViewModel.getApprovedUsers()
+    }
+
+    // Filter lists based on search
+    val filteredPending = pendingUsers.filter {
+        it.name.contains(searchQuery, ignoreCase = true) ||
+                it.email.contains(searchQuery, ignoreCase = true)
+    }
+    val filteredApproved = approvedUsers
+        .filter {
+            it.name.contains(searchQuery, ignoreCase = true) ||
+                    it.email.contains(searchQuery, ignoreCase = true)
+        }
+        .sortedBy { if (it.role.lowercase() == "admin") 0 else 1 }
+
+    // Merge into one list with headers
+    val combinedList = buildList<Pair<String, AppUser?>> {
+        if (filteredPending.isNotEmpty()) {
+            add("Pending Requests" to null)
+            filteredPending.forEach { add("" to it) }
+        }
+        if (filteredApproved.isNotEmpty()) {
+            add("Approved Users" to null)
+            filteredApproved.forEach { add("" to it) }
         }
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Pending Signup Requests") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                title = { Text("Admin Dashboard") },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color(0xFF0D47A1),
+                    titleContentColor = Color.White
+                ),
+                actions = {
+                    TextButton(onClick = {
+                        scope.launch {
+                            authViewModel.adminLoggedOut(context)
+                            onLogout()
+                        }
+                    }) {
+                        Text("Logout", color = Color.White)
                     }
                 }
             )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) }
-    ) { paddingValues ->
-        Box(
+    ) { padding ->
+        Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
-                .padding(paddingValues),
-            contentAlignment = Alignment.Center
+                .padding(padding)
+                .padding(16.dp)
         ) {
-            if (requests.isEmpty()) {
-                Text("No pending requests", style = MaterialTheme.typography.bodyLarge)
-            } else {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 24.dp),
-                    contentPadding = PaddingValues(vertical = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    items(requests) { user ->
+            // Search bar
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                label = { Text("Search by name or email") },
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(Modifier.height(16.dp))
+
+            LazyColumn(modifier = Modifier.fillMaxSize()) {
+                items(combinedList) { (header, user) ->
+                    if (user == null) {
+                        // Section header
+                        Text(
+                            text = header,
+                            style = MaterialTheme.typography.headlineSmall,
+                            modifier = Modifier.padding(vertical = 8.dp)
+                        )
+                    } else {
                         Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                            elevation = CardDefaults.cardElevation(4.dp)
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp)
                         ) {
-                            Column(
+                            Row(
                                 modifier = Modifier
-                                    .padding(16.dp)
-                                    .fillMaxWidth(),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                                    .fillMaxWidth()
+                                    .padding(12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Text("Name: ${user.name}", style = MaterialTheme.typography.bodyLarge)
-                                Text("Email: ${user.email}", style = MaterialTheme.typography.bodyMedium)
+                                Column {
+                                    Text(user.name, style = MaterialTheme.typography.titleMedium)
+                                    Text(user.email, style = MaterialTheme.typography.bodyMedium)
+                                    if (user.isApproved) {
+                                        val roleColor =
+                                            if (user.role.lowercase() == "admin") Color(0xFF4CAF50) else Color(0xFF2196F3)
+                                        Text(
+                                            text = "Role: ${user.role}",
+                                            color = Color.White,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            modifier = Modifier
+                                                .padding(top = 4.dp)
+                                                .background(roleColor)
+                                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                                        )
+                                    }
+                                }
 
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                                ) {
-                                    // Approve button
-                                    Button(
-                                        onClick = {
-                                            scope.launch {
-                                                authViewModel.approveRequest(user) {
-                                                    approvedUser = user
-                                                    showDialog = true
-                                                    // Refresh the list
-                                                    authViewModel.getPendingRequests { updated ->
-                                                        requests = updated
-                                                    }
+                                Row {
+                                    if (!user.isApproved) {
+                                        Button(
+                                            onClick = {
+                                                scope.launch {
+                                                    authViewModel.approveRequest(user)
+                                                    pendingUsers = pendingUsers.filter { it.email != user.email }
+                                                    approvedUsers = approvedUsers + user.copy(isApproved = true)
+                                                    snackbarHostState.showSnackbar("${user.name} approved")
                                                 }
-                                                snackbarHostState.showSnackbar("User ${user.email} approved")
-                                            }
-                                        },
-                                        modifier = Modifier.weight(1f),
-                                        shape = RoundedCornerShape(12.dp),
-                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                                    ) {
-                                        Text("Approve", color = MaterialTheme.colorScheme.onPrimary)
+                                            },
+                                            modifier = Modifier.padding(end = 8.dp)
+                                        ) { Text("Approve") }
                                     }
 
-                                    // Deny button
-                                    Button(
+                                    OutlinedButton(
+                                        colors = ButtonDefaults.outlinedButtonColors(
+                                            contentColor = Color.White,
+                                            containerColor = Color(0xFFD32F2F)
+                                        ),
                                         onClick = {
                                             scope.launch {
-                                                authViewModel.deleteUser(user) {
-                                                    authViewModel.getPendingRequests { updated ->
-                                                        requests = updated
-                                                    }
-                                                }
-                                                snackbarHostState.showSnackbar("Request denied for ${user.email}")
+                                                authViewModel.deleteUser(user)
+                                                pendingUsers = pendingUsers.filter { it.email != user.email }
+                                                approvedUsers = approvedUsers.filter { it.email != user.email }
+                                                snackbarHostState.showSnackbar("${user.name} deleted")
                                             }
-                                        },
-                                        modifier = Modifier.weight(1f),
-                                        shape = RoundedCornerShape(12.dp),
-                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-                                    ) {
-                                        Text("Deny", color = MaterialTheme.colorScheme.onPrimary)
-                                    }
+                                        }
+                                    ) { Text("Delete") }
                                 }
                             }
                         }
@@ -132,19 +175,5 @@ fun AdminScreen(
                 }
             }
         }
-    }
-
-    // Approval dialog
-    if (showDialog && approvedUser != null) {
-        AlertDialog(
-            onDismissRequest = { showDialog = false },
-            title = { Text("User Approved") },
-            text = { Text("User ${approvedUser!!.email} has been approved!") },
-            confirmButton = {
-                TextButton(onClick = { showDialog = false }) {
-                    Text("OK")
-                }
-            }
-        )
     }
 }

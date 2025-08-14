@@ -1,8 +1,10 @@
 package thesis.project.omrscanner.auth
 
 import android.app.Application
+import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import thesis.project.omrscanner.data.UserDatabase
 
@@ -10,67 +12,82 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
 
     private val userDao = UserDatabase.getInstance(application).userDao()
 
-    // Login by email
-    fun login(email: String, password: String, onResult: (Boolean, String?) -> Unit) {
-        viewModelScope.launch {
-            val user = userDao.getUserByEmail(email)
-            if (user != null) {
-                if (user.role != "pending") { // check if approved
-                    if (user.password == password) {
-                        onResult(true, user.role)
-                    } else {
-                        onResult(false, "Invalid email or password")
-                    }
-                } else {
-                    onResult(false, "Account not approved yet")
-                }
+    /** User login - suspend function */
+    suspend fun login(email: String, password: String, context: Context): Pair<Boolean, String?> {
+        val user = userDao.login(email, password)
+        return if (user != null) {
+            if (user.isApproved) {
+                // Save login state
+                AuthDataStore.saveUserLogin(context, user.email, user.role == "admin")
+                Pair(true, user.role)
             } else {
-                onResult(false, "Invalid email or password")
+                Pair(false, "Account not approved yet.")
             }
+        } else {
+            Pair(false, "Invalid email or password")
         }
     }
 
-    // Submit new signup request
-    fun submitSignupRequest(password: String, email: String, name: String, onResult: (Boolean, String?) -> Unit) {
+    /** Logout user */
+    fun logout(context: Context) {
         viewModelScope.launch {
+            AuthDataStore.clearUserLogin(context)
+        }
+    }
+
+    /** Check if admin is logged in */
+    suspend fun isAdminLoggedIn(context: Context): Boolean {
+        return AuthDataStore.isAdminLoggedIn(context).first()
+    }
+
+    /** Admin login state */
+    fun adminLoggedIn(context: Context) {
+        viewModelScope.launch { AuthDataStore.saveAdminLogin(context, true) }
+    }
+
+    fun adminLoggedOut(context: Context) {
+        viewModelScope.launch { AuthDataStore.saveAdminLogin(context, false) }
+    }
+
+    /** Submit signup request */
+    fun submitSignupRequest(
+        password: String,
+        email: String,
+        name: String
+    ): Pair<Boolean, String> {
+        return try {
             val newUser = AppUser(
                 email = email,
                 password = password,
                 name = name,
-                role = "pending" // pending approval
+                role = "user",
+                isApproved = false
             )
-            userDao.insert(newUser)
-            onResult(true, "Signup request submitted successfully")
+            viewModelScope.launch {
+                userDao.insert(newUser)
+            }
+            Pair(true, "Signup request submitted successfully")
+        } catch (e: Exception) {
+            Pair(false, "Failed to submit signup request: ${e.message}")
         }
     }
 
-    // Get pending requests (role = "pending")
-    fun getPendingRequests(onResult: (List<AppUser>) -> Unit) {
-        viewModelScope.launch {
-            onResult(userDao.getPendingRequests())
-        }
+    /** Get pending requests */
+    suspend fun getPendingRequests(): List<AppUser> {
+        return userDao.getPendingRequests()
     }
 
-    // Approve user (change role to "user")
-    fun approveRequest(user: AppUser, onResult: () -> Unit) {
-        viewModelScope.launch {
-            userDao.update(user.copy(role = "user"))
-            onResult()
-        }
+    /** Get approved users */
+    suspend fun getApprovedUsers(): List<AppUser> {
+        return userDao.getApprovedUsers()
     }
 
-    // Delete user
-    fun deleteUser(user: AppUser, onResult: () -> Unit) {
-        viewModelScope.launch {
-            userDao.delete(user)
-            onResult()
-        }
+    /** Admin approve or delete user */
+    suspend fun approveRequest(user: AppUser) {
+        userDao.update(user.copy(isApproved = true))
     }
 
-    // Get all approved users (role != "pending")
-    fun getApprovedUsers(onResult: (List<AppUser>) -> Unit) {
-        viewModelScope.launch {
-            onResult(userDao.getApprovedUsers())
-        }
+    suspend fun deleteUser(user: AppUser) {
+        userDao.delete(user)
     }
 }

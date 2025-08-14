@@ -116,6 +116,9 @@ dependencies {
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
 
+    //Persistent Login
+    implementation("androidx.datastore:datastore-preferences:1.1.0")
+
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.9.0") // viewModelScope
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.9.0")  // Lifecycle-aware coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")

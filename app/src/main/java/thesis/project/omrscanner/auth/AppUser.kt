@@ -3,12 +3,12 @@ package thesis.project.omrscanner.auth
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
-@Entity(tableName = "app_user")
+@Entity(tableName = "users")
 data class AppUser(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
-    val password: String,   // hashed or plain (for now)
     val email: String,
+    val password: String,
     val name: String,
-    val role: String = "user", // "admin" or "user"
+    val role: String = "user",     // "user" or "admin"
     val isApproved: Boolean = false
 )
