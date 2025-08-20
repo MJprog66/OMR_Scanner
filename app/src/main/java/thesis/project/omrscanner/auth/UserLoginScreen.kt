@@ -1,6 +1,5 @@
 package thesis.project.omrscanner.auth
 
-import android.content.Context
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -15,8 +14,6 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -26,7 +23,6 @@ fun UserLoginScreen(
     onNavigateToSignup: () -> Unit,
     onNavigateToAdminLogin: () -> Unit
 ) {
-    val authViewModel: AuthViewModel = viewModel()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -36,20 +32,9 @@ fun UserLoginScreen(
     var showPassword by remember { mutableStateOf(false) }
     var isLoading by remember { mutableStateOf(false) }
 
-    // Auto-login if user already logged in
-    LaunchedEffect(Unit) {
-        val savedEmail = AuthDataStore.getUserEmail(context).first()
-        if (!savedEmail.isNullOrBlank()) {
-            onLoginSuccess()
-        }
-    }
-
     Scaffold(snackbarHost = { SnackbarHost(snackbarHostState) }) { padding ->
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(24.dp),
+            modifier = Modifier.fillMaxSize().padding(padding).padding(24.dp),
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -69,7 +54,6 @@ fun UserLoginScreen(
                 value = password,
                 onValueChange = { password = it },
                 label = { Text("Password") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                 visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
                 trailingIcon = {
                     IconButton(onClick = { showPassword = !showPassword }) {
@@ -79,6 +63,7 @@ fun UserLoginScreen(
                         )
                     }
                 },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                 modifier = Modifier.fillMaxWidth()
             )
             Spacer(Modifier.height(24.dp))
@@ -92,33 +77,23 @@ fun UserLoginScreen(
 
                     isLoading = true
                     scope.launch {
-                        // Call suspend login function
-                        val (success, roleOrMsg) = authViewModel.login(email.trim(), password, context)
+                        val result = UserManager.login(email.trim(), password)
                         isLoading = false
-                        if (success && roleOrMsg == "user") {
-                            snackbarHostState.showSnackbar("Login successful!")
+                        if (result.isSuccess) {
                             onLoginSuccess()
                         } else {
-                            snackbarHostState.showSnackbar(roleOrMsg ?: "Login failed")
+                            snackbarHostState.showSnackbar(result.exceptionOrNull()?.message ?: "Login failed")
                         }
                     }
                 },
                 modifier = Modifier.fillMaxWidth(),
                 enabled = !isLoading
             ) {
-                if (isLoading) {
-                    CircularProgressIndicator(
-                        color = MaterialTheme.colorScheme.onPrimary,
-                        strokeWidth = 2.dp,
-                        modifier = Modifier.size(20.dp)
-                    )
-                } else {
-                    Text("Login")
-                }
+                if (isLoading) CircularProgressIndicator(modifier = Modifier.size(20.dp))
+                else Text("Login")
             }
 
             Spacer(Modifier.height(16.dp))
-
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween

@@ -6,30 +6,35 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import thesis.project.omrscanner.data.UserDatabase
 
 class AuthViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val userDao = UserDatabase.getInstance(application).userDao()
+    private val context: Context = application.applicationContext
 
-    /** User login - suspend function */
+    /** User login */
     suspend fun login(email: String, password: String, context: Context): Pair<Boolean, String?> {
-        val user = userDao.login(email, password)
-        return if (user != null) {
-            if (user.isApproved) {
-                // Save login state
-                AuthDataStore.saveUserLogin(context, user.email, user.role == "admin")
-                Pair(true, user.role)
-            } else {
+        val result = UserManager.login(email, password)
+        return if (result.isSuccess) {
+            val data = result.getOrNull() ?: emptyMap()
+            val approved = data["approved"] as? Boolean ?: false
+            val isAdmin = data["isAdmin"] as? Boolean ?: false
+
+            if (!approved) {
                 Pair(false, "Account not approved yet.")
+            } else {
+                // Save login state
+                AuthDataStore.saveUserLogin(context, email, isAdmin)
+                if (isAdmin) adminLoggedIn(context)
+                Pair(true, if (isAdmin) "admin" else "user")
             }
         } else {
-            Pair(false, "Invalid email or password")
+            Pair(false, result.exceptionOrNull()?.localizedMessage ?: "Login failed")
         }
     }
 
-    /** Logout user */
+    /** User logout */
     fun logout(context: Context) {
+        UserManager.logout()
         viewModelScope.launch {
             AuthDataStore.clearUserLogin(context)
         }
@@ -49,45 +54,45 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { AuthDataStore.saveAdminLogin(context, false) }
     }
 
-    /** Submit signup request */
+    /** Submit signup request for regular users */
     fun submitSignupRequest(
-        password: String,
         email: String,
-        name: String
+        password: String,
+        isAdmin: Boolean = false
     ): Pair<Boolean, String> {
         return try {
-            val newUser = AppUser(
-                email = email,
-                password = password,
-                name = name,
-                role = "user",
-                isApproved = false
-            )
             viewModelScope.launch {
-                userDao.insert(newUser)
+                val result = UserManager.signup(email, password, isAdmin)
+                if (result.isFailure) throw result.exceptionOrNull() ?: Exception("Signup failed")
             }
             Pair(true, "Signup request submitted successfully")
         } catch (e: Exception) {
-            Pair(false, "Failed to submit signup request: ${e.message}")
+            Pair(false, "Failed to submit signup request: ${e.localizedMessage}")
         }
     }
 
-    /** Get pending requests */
-    suspend fun getPendingRequests(): List<AppUser> {
-        return userDao.getPendingRequests()
+    /** Admin-only: get pending signup requests */
+    suspend fun getPendingRequests(): List<Map<String, Any>> {
+        return UserManager.getPendingRequests()
     }
 
-    /** Get approved users */
-    suspend fun getApprovedUsers(): List<AppUser> {
-        return userDao.getApprovedUsers()
+    /** Admin-only: approve a user by UID */
+    suspend fun approveRequest(uid: String): Pair<Boolean, String> {
+        return try {
+            UserManager.approveUser(uid)
+            Pair(true, "User approved successfully")
+        } catch (e: Exception) {
+            Pair(false, "Failed to approve user: ${e.localizedMessage}")
+        }
     }
 
-    /** Admin approve or delete user */
-    suspend fun approveRequest(user: AppUser) {
-        userDao.update(user.copy(isApproved = true))
-    }
-
-    suspend fun deleteUser(user: AppUser) {
-        userDao.delete(user)
+    /** Admin-only: delete a user by UID */
+    suspend fun deleteUser(uid: String): Pair<Boolean, String> {
+        return try {
+            UserManager.deleteUser(uid)
+            Pair(true, "User deleted successfully")
+        } catch (e: Exception) {
+            Pair(false, "Failed to delete user: ${e.localizedMessage}")
+        }
     }
 }

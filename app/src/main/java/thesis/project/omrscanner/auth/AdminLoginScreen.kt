@@ -11,10 +11,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -25,9 +25,9 @@ fun AdminLoginScreen(
     onNavigateToUserLogin: () -> Unit
 ) {
     val authViewModel: AuthViewModel = viewModel()
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
-    val context = LocalContext.current
 
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
@@ -46,22 +46,19 @@ fun AdminLoginScreen(
             Text("Admin Login", style = MaterialTheme.typography.headlineMedium)
             Spacer(Modifier.height(24.dp))
 
-            // Email input
             OutlinedTextField(
                 value = email,
                 onValueChange = { email = it },
                 label = { Text("Email") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
                 modifier = Modifier.fillMaxWidth()
             )
+
             Spacer(Modifier.height(16.dp))
 
-            // Password input
             OutlinedTextField(
                 value = password,
                 onValueChange = { password = it },
                 label = { Text("Password") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                 visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
                 trailingIcon = {
                     IconButton(onClick = { showPassword = !showPassword }) {
@@ -73,20 +70,21 @@ fun AdminLoginScreen(
                 },
                 modifier = Modifier.fillMaxWidth()
             )
+
             Spacer(Modifier.height(24.dp))
 
-            // Login button
             Button(
                 onClick = {
                     if (email.isBlank() || password.isBlank()) {
                         scope.launch { snackbarHostState.showSnackbar("Enter email and password") }
                         return@Button
                     }
+
                     isLoading = true
                     scope.launch {
-                        // Use existing AuthViewModel login function
                         val (success, roleOrMsg) = authViewModel.login(email.trim(), password, context)
                         isLoading = false
+
                         if (success && roleOrMsg == "admin") {
                             snackbarHostState.showSnackbar("Admin login successful!")
                             onLoginSuccess()
@@ -111,13 +109,8 @@ fun AdminLoginScreen(
 
             Spacer(Modifier.height(16.dp))
 
-            // Navigation buttons
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                TextButton(onClick = onNavigateToSignup) { Text("Signup Request") }
-                TextButton(onClick = onNavigateToUserLogin) { Text("User Login") }
+            TextButton(onClick = onNavigateToSignup) { Text("Signup Request") }
+            TextButton(onClick = onNavigateToUserLogin) { Text("Login as User")
             }
         }
     }

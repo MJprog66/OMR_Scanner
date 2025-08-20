@@ -1,76 +1,78 @@
 package thesis.project.omrscanner.auth
 
-import android.content.Context
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
 object UserManager {
 
-    /**
-     * Checks approval status with offline-first approach.
-     */
-    suspend fun isUserApproved(email: String, context: Context): Boolean {
-        val prefs = context.getSharedPreferences("user_prefs", Context.MODE_PRIVATE)
+    private val auth: FirebaseAuth = FirebaseAuth.getInstance()
+    private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance()
 
-        // 1. Offline check first
-        val locallyApproved = prefs.getBoolean("approved", false)
-        if (locallyApproved) {
-            // Trigger background refresh without blocking
-            refreshApprovalStatus(email, context)
-            return true
-        }
+    // Signup function (existing)
+    suspend fun signup(email: String, password: String, isAdmin: Boolean = false) = try {
+        auth.createUserWithEmailAndPassword(email, password).await()
+        val uid = auth.currentUser?.uid ?: throw Exception("Signup failed")
+        firestore.collection("users").document(uid)
+            .set(
+                mapOf(
+                    "email" to email,
+                    "isAdmin" to isAdmin,
+                    "approved" to !isAdmin // Admin auto-approved
+                )
+            ).await()
+        Result.success(Unit)
+    } catch (e: Exception) {
+        Result.failure(e)
+    }
 
-        // 2. If not approved locally, check online
+    // Login function (existing)
+    suspend fun login(email: String, password: String) = try {
+        auth.signInWithEmailAndPassword(email, password).await()
+        val uid = auth.currentUser?.uid ?: throw Exception("Login failed")
+        val doc = firestore.collection("users").document(uid).get().await()
+        Result.success(doc.data ?: emptyMap<String, Any>())
+    } catch (e: Exception) {
+        Result.failure(e)
+    }
+
+    // Logout
+    fun logout() {
+        auth.signOut()
+    }
+
+    // Admin-only: get pending requests
+    suspend fun getPendingRequests(): List<Map<String, Any>> {
         return try {
-            val doc = FirebaseFirestore.getInstance()
-                .collection("signup_requests")
-                .document(email)
-                .get()
-                .await()
-
-            val approvedOnline = doc.getBoolean("approved") ?: false
-            if (approvedOnline) {
-                saveApprovalLocally(email, context)
-            }
-            approvedOnline
-        } catch (e: Exception) {
-            false
+            val snapshot = firestore.collection("users")
+                .whereEqualTo("approved", false)
+                .get().await()
+            snapshot.documents.map { it.data!!.plus("uid" to it.id) }
+        } catch (_: Exception) {
+            emptyList()
         }
     }
 
-    /**
-     * Refresh approval status in the background (non-blocking).
-     */
-    fun refreshApprovalStatus(email: String, context: Context) {
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                val doc = FirebaseFirestore.getInstance()
-                    .collection("signup_requests")
-                    .document(email)
-                    .get()
-                    .await()
-
-                val approvedOnline = doc.getBoolean("approved") ?: false
-                if (approvedOnline) {
-                    saveApprovalLocally(email, context)
-                }
-            } catch (_: Exception) {
-                // Ignore errors — keep local status
-            }
+    // Admin-only: get all approved users
+    suspend fun getAllApprovedUsers(): List<Map<String, Any>> {
+        return try {
+            val snapshot = firestore.collection("users")
+                .whereEqualTo("approved", true)
+                .get().await()
+            snapshot.documents.map { it.data!!.plus("uid" to it.id) }
+        } catch (_: Exception) {
+            emptyList()
         }
     }
 
-    /**
-     * Save approval status locally for offline access.
-     */
-    private fun saveApprovalLocally(email: String, context: Context) {
-        val prefs = context.getSharedPreferences("user_prefs", Context.MODE_PRIVATE)
-        prefs.edit()
-            .putBoolean("approved", true)
-            .putString("email", email)
-            .apply()
+    // Admin-only: approve user
+    suspend fun approveUser(uid: String) {
+        firestore.collection("users").document(uid)
+            .update("approved", true).await()
+    }
+
+    // Admin-only: delete user
+    suspend fun deleteUser(uid: String) {
+        firestore.collection("users").document(uid).delete().await()
     }
 }

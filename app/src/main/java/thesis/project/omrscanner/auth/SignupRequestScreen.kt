@@ -13,7 +13,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -23,7 +23,7 @@ fun SignupRequestScreen(
     onNavigateToAdminLogin: () -> Unit,
     onNavigateToUserLogin: () -> Unit
 ) {
-    val authViewModel: AuthViewModel = viewModel()
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -35,10 +35,7 @@ fun SignupRequestScreen(
 
     Scaffold(snackbarHost = { SnackbarHost(snackbarHostState) }) { padding ->
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(24.dp),
+            modifier = Modifier.fillMaxSize().padding(padding).padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
@@ -66,7 +63,6 @@ fun SignupRequestScreen(
                 value = password,
                 onValueChange = { password = it },
                 label = { Text("Password") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                 visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
                 trailingIcon = {
                     IconButton(onClick = { showPassword = !showPassword }) {
@@ -76,6 +72,7 @@ fun SignupRequestScreen(
                         )
                     }
                 },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                 modifier = Modifier.fillMaxWidth()
             )
             Spacer(Modifier.height(24.dp))
@@ -86,39 +83,31 @@ fun SignupRequestScreen(
                         scope.launch { snackbarHostState.showSnackbar("Please fill in all fields.") }
                         return@Button
                     }
+
                     loading = true
                     scope.launch {
-                        val (success, msg) = authViewModel.submitSignupRequest(
-                            password = password,
-                            email = email,
-                            name = name
-                        )
+                        val result = UserManager.signup(email.trim(), password, isAdmin = false)
                         loading = false
-                        scope.launch { snackbarHostState.showSnackbar(msg) }
-                        if (success) {
+
+                        if (result.isSuccess) {
+                            snackbarHostState.showSnackbar("Signup request submitted!")
                             name = ""
                             email = ""
                             password = ""
                             onBack()
+                        } else {
+                            snackbarHostState.showSnackbar(result.exceptionOrNull()?.message ?: "Signup failed")
                         }
                     }
                 },
                 modifier = Modifier.fillMaxWidth(),
                 enabled = !loading
             ) {
-                if (loading) {
-                    CircularProgressIndicator(
-                        color = MaterialTheme.colorScheme.onPrimary,
-                        strokeWidth = 2.dp,
-                        modifier = Modifier.size(20.dp)
-                    )
-                } else {
-                    Text("Submit Request")
-                }
+                if (loading) CircularProgressIndicator(modifier = Modifier.size(20.dp))
+                else Text("Submit Request")
             }
 
             Spacer(Modifier.height(16.dp))
-
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
