@@ -11,11 +11,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -24,7 +26,6 @@ fun AdminLoginScreen(
     onNavigateToSignup: () -> Unit,
     onNavigateToUserLogin: () -> Unit
 ) {
-    val authViewModel: AuthViewModel = viewModel()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -68,7 +69,8 @@ fun AdminLoginScreen(
                         )
                     }
                 },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
             )
 
             Spacer(Modifier.height(24.dp))
@@ -82,14 +84,36 @@ fun AdminLoginScreen(
 
                     isLoading = true
                     scope.launch {
-                        val (success, roleOrMsg) = authViewModel.login(email.trim(), password, context)
-                        isLoading = false
+                        try {
+                            val auth = FirebaseAuth.getInstance()
+                            val firestore = FirebaseFirestore.getInstance()
 
-                        if (success && roleOrMsg == "admin") {
-                            snackbarHostState.showSnackbar("Admin login successful!")
-                            onLoginSuccess()
-                        } else {
-                            snackbarHostState.showSnackbar(roleOrMsg ?: "Login failed")
+                            // Sign in with Firebase Auth
+                            val result = auth.signInWithEmailAndPassword(email.trim(), password).await()
+                            val uid = result.user?.uid
+
+                            if (uid == null) {
+                                snackbarHostState.showSnackbar("Login failed: no UID")
+                                isLoading = false
+                                return@launch
+                            }
+
+                            // Get Firestore user document
+                            val doc = firestore.collection("users").document(uid).get().await()
+                            val isAdmin = doc.getBoolean("isAdmin") ?: false
+                            val approved = doc.getBoolean("approved") ?: false
+
+                            if (isAdmin && approved) {
+                                snackbarHostState.showSnackbar("Admin login successful!")
+                                onLoginSuccess()
+                            } else {
+                                auth.signOut()
+                                snackbarHostState.showSnackbar("You are not an approved admin")
+                            }
+                        } catch (e: Exception) {
+                            snackbarHostState.showSnackbar("Login failed: ${e.localizedMessage}")
+                        } finally {
+                            isLoading = false
                         }
                     }
                 },
@@ -109,8 +133,12 @@ fun AdminLoginScreen(
 
             Spacer(Modifier.height(16.dp))
 
-            TextButton(onClick = onNavigateToSignup) { Text("Signup Request") }
-            TextButton(onClick = onNavigateToUserLogin) { Text("Login as User")
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                TextButton(onClick = onNavigateToSignup) { Text("Signup Request") }
+                TextButton(onClick = onNavigateToUserLogin) { Text("User Login") }
             }
         }
     }

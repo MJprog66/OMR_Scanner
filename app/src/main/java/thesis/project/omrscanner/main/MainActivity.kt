@@ -52,10 +52,9 @@ class MainActivity : ComponentActivity() {
         val auth = FirebaseAuth.getInstance()
         val firestore = FirebaseFirestore.getInstance()
 
-        // Run in a coroutine scope
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                // Check if any admin already exists
+                // Check if any admin exists in Firestore
                 val adminQuery = firestore.collection("users")
                     .whereEqualTo("isAdmin", true)
                     .get()
@@ -66,23 +65,19 @@ class MainActivity : ComponentActivity() {
                     val email = "omrscannerapp@gmail.com"
                     val password = "admin123"
 
-                    // Check if the user already exists in Authentication (avoid duplication)
-                    val userExists = auth.fetchSignInMethodsForEmail(email)
-                        .await().signInMethods?.isNotEmpty() == true
-                    val uid = if (!userExists) {
+                    // Check if Auth user exists
+                    val signInMethods = auth.fetchSignInMethodsForEmail(email).await()
+                    val uid = if (signInMethods.signInMethods.isNullOrEmpty()) {
+                        // Create Auth user
                         val result = auth.createUserWithEmailAndPassword(email, password).await()
                         result.user?.uid ?: throw Exception("Failed to get UID for default admin")
                     } else {
-                        // Get UID from Firestore if already exists in Authentication
-                        val doc = firestore.collection("users")
-                            .whereEqualTo("email", email)
-                            .get()
-                            .await()
-                        doc.documents.firstOrNull()?.id
-                            ?: throw Exception("Default admin exists in Auth but not in Firestore")
+                        // Auth user exists, use its UID
+                        val user = auth.signInWithEmailAndPassword(email, password).await().user
+                        user?.uid ?: throw Exception("Auth user exists but UID not found")
                     }
 
-                    // Add or update Firestore document
+                    // Create Firestore document for admin
                     firestore.collection("users").document(uid).set(
                         mapOf(
                             "email" to email,
@@ -91,9 +86,9 @@ class MainActivity : ComponentActivity() {
                         )
                     ).await()
 
-                    Log.i("AdminSetup", "Default admin ensured: $email / $password")
+                    Log.i("AdminSetup", "Default admin created: $email / $password")
                 } else {
-                    Log.i("AdminSetup", "Admin already exists, skipping creation")
+                    Log.i("AdminSetup", "Admin already exists, no action needed")
                 }
             } catch (e: Exception) {
                 Log.e("AdminSetup", "Failed to ensure default admin: ${e.localizedMessage}")
