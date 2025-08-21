@@ -60,28 +60,24 @@ fun ResultScreen(
 
     var sheetTitles by remember { mutableStateOf<List<String>>(emptyList()) }
     var selectedTitle by remember { mutableStateOf(omrSheetTitle) }
-    var expanded by remember { mutableStateOf(false) }
 
     // Sort/filter/search states
     var selectedSortOption by remember { mutableStateOf(SortOption.DATE) }
     var selectedFilterOption by remember { mutableStateOf(FilterOption.ALL) }
     var searchQuery by remember { mutableStateOf("") }
 
-    // Sections expanded state (sectionName -> isExpanded)
+    // Sections expanded state
     val expandedSections = remember { mutableStateMapOf<String, Boolean>() }
 
     // Dialog states
     var showDialog by remember { mutableStateOf(false) }
     var dialogImagePath by remember { mutableStateOf<String?>(null) }
-
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
     var resultToDelete by remember { mutableStateOf<StudentResult?>(null) }
-
     var showDeleteAllConfirmDialog by remember { mutableStateOf(false) }
-
-    // New for delete section
-    var showDeleteSectionDialog by remember { mutableStateOf(false) }
     var sectionToDelete by remember { mutableStateOf<String?>(null) }
+    var showDeleteSectionDialog by remember { mutableStateOf(false) }
+    var sheetToDelete by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
         sheetTitles = viewModel.getAllSheetTitles()
@@ -96,29 +92,54 @@ fun ResultScreen(
                 Text("Select OMR Sheet Title", style = MaterialTheme.typography.titleMedium)
                 Spacer(modifier = Modifier.height(8.dp))
 
-                Box(modifier = Modifier.fillMaxWidth()) {
-                    OutlinedButton(
-                        onClick = { expanded = true },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("Choose Sheet Title")
-                    }
+                // 🔍 Search Bar
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    label = { Text("Search Sheet Title") },
+                    modifier = Modifier.fillMaxWidth()
+                )
 
-                    DropdownMenu(
-                        expanded = expanded,
-                        onDismissRequest = { expanded = false },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        sheetTitles.forEach { title ->
-                            DropdownMenuItem(
-                                text = { Text(title) },
-                                onClick = {
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // 📄 Sheet Title Cards
+                val filteredTitles = sheetTitles.filter {
+                    it.contains(searchQuery, ignoreCase = true)
+                }
+
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(filteredTitles) { title ->
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
                                     selectedTitle = title
                                     viewModel.loadResultsForTitle(title)
-                                    expanded = false
                                     searchQuery = ""
+                                },
+                            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = title,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                IconButton(onClick = {
+                                    sheetToDelete = title
+                                    showDeleteAllConfirmDialog = true
+                                }) {
+                                    Icon(
+                                        imageVector = Icons.Default.Delete,
+                                        contentDescription = "Delete All Results"
+                                    )
                                 }
-                            )
+                            }
                         }
                     }
                 }
@@ -126,6 +147,7 @@ fun ResultScreen(
                 Spacer(modifier = Modifier.height(16.dp))
             }
 
+            // 👉 Existing results display when a title is selected
             selectedTitle?.let { title ->
                 val allResults by viewModel.results.collectAsState()
 
@@ -159,6 +181,7 @@ fun ResultScreen(
                 Text("Results for \"$title\"", style = MaterialTheme.typography.titleLarge)
                 Spacer(modifier = Modifier.height(8.dp))
 
+                // 🔍 Search within students
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
@@ -168,6 +191,7 @@ fun ResultScreen(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
+                // Existing Sort & Filter Row
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
@@ -214,6 +238,7 @@ fun ResultScreen(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
+                // 👉 Existing results list
                 if (sortedResults.isEmpty()) {
                     Text("No results found.")
                 } else {
@@ -250,7 +275,6 @@ fun ResultScreen(
 
                                     Spacer(modifier = Modifier.width(8.dp))
 
-                                    // Delete section button
                                     IconButton(
                                         onClick = {
                                             sectionToDelete = section
@@ -309,8 +333,7 @@ fun ResultScreen(
                                                     .clickable {
                                                         dialogImagePath = result.image
                                                         showDialog = true
-                                                    },
-                                                onError = { /* optional error handling */ }
+                                                    }
                                             )
                                         }
                                     }
@@ -322,24 +345,43 @@ fun ResultScreen(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                Button(
-                    onClick = {
-                        showDeleteAllConfirmDialog = true
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-                ) {
-                    Text("Delete All Results for \"$title\"")
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                navigateToResult?.let {
-                    OutlinedButton(onClick = it) {
-                        Text("Back")
-                    }
+                OutlinedButton(onClick = { selectedTitle = null }) {
+                    Text("Back to Sheets")
                 }
             }
         }
+    }
+
+    /**------------DIALOGS-------------**/
+    // Delete All Confirmation for a Sheet
+    if (showDeleteAllConfirmDialog && sheetToDelete != null) {
+        AlertDialog(
+            onDismissRequest = { showDeleteAllConfirmDialog = false },
+            title = { Text("Confirm Deletion") },
+            text = { Text("Delete all results of \"${sheetToDelete}\"?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.deleteResultsForTitle(sheetToDelete!!)
+                    coroutineScope.launch {
+                        snackbarHostState.showSnackbar("Deleted all results for \"$sheetToDelete\"")
+                    }
+                    sheetTitles = sheetTitles.filterNot { it == sheetToDelete }
+                    if (selectedTitle == sheetToDelete) selectedTitle = null
+                    sheetToDelete = null
+                    showDeleteAllConfirmDialog = false
+                }) {
+                    Text("Delete All")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showDeleteAllConfirmDialog = false
+                    sheetToDelete = null
+                }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 
     // Fullscreen Zoomable Image Viewer
