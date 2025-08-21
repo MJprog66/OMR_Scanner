@@ -18,13 +18,14 @@ object UserManager {
                 mapOf(
                     "email" to email,
                     "isAdmin" to isAdmin,
-                    "approved" to !isAdmin // Admin auto-approved
+                    "approved" to if (isAdmin) true else false // only admins auto-approved
                 )
             ).await()
         Result.success(Unit)
     } catch (e: Exception) {
         Result.failure(e)
     }
+
 
     // Login function (existing)
     suspend fun login(email: String, password: String) = try {
