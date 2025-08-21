@@ -35,7 +35,10 @@ fun SignupRequestScreen(
 
     Scaffold(snackbarHost = { SnackbarHost(snackbarHostState) }) { padding ->
         Column(
-            modifier = Modifier.fillMaxSize().padding(padding).padding(24.dp),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
@@ -90,7 +93,7 @@ fun SignupRequestScreen(
                         loading = false
 
                         if (result.isSuccess) {
-                            snackbarHostState.showSnackbar("Signup request submitted!")
+                            snackbarHostState.showSnackbar("Signup request submitted! Waiting for admin approval.")
                             name = ""
                             email = ""
                             password = ""
