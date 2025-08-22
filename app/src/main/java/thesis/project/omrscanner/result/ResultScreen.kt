@@ -9,10 +9,12 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -21,6 +23,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
@@ -28,18 +31,8 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import coil.compose.AsyncImage
 import kotlinx.coroutines.launch
 
-
-enum class SortOption(val label: String) {
-    DATE("Date"),
-    NAME("Name"),
-    SCORE("Score")
-}
-
-enum class FilterOption(val label: String) {
-    ALL("All"),
-    PASS("Pass"),
-    FAIL("Fail")
-}
+enum class SortOption(val label: String) { DATE("Date"), NAME("Name"), SCORE("Score") }
+enum class FilterOption(val label: String) { ALL("All"), PASS("Pass"), FAIL("Fail") }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -53,21 +46,17 @@ fun ResultScreen(
 
     val viewModel: ResultViewModel = viewModel(
         factory = viewModelFactory {
-            initializer {
-                ResultViewModel(context.applicationContext as Application)
-            }
+            initializer { ResultViewModel(context.applicationContext as Application) }
         }
     )
 
     var sheetTitles by remember { mutableStateOf<List<String>>(emptyList()) }
     var selectedTitle by remember { mutableStateOf(omrSheetTitle) }
 
-    // Sort/filter/search states
     var selectedSortOption by remember { mutableStateOf(SortOption.DATE) }
     var selectedFilterOption by remember { mutableStateOf(FilterOption.ALL) }
     var searchQuery by remember { mutableStateOf("") }
 
-    // Sections expanded state
     val expandedSections = remember { mutableStateMapOf<String, Boolean>() }
 
     // Dialog states
@@ -76,38 +65,36 @@ fun ResultScreen(
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
     var resultToDelete by remember { mutableStateOf<StudentResult?>(null) }
     var showDeleteAllConfirmDialog by remember { mutableStateOf(false) }
-    var sectionToDelete by remember { mutableStateOf<String?>(null) }
-    var showDeleteSectionDialog by remember { mutableStateOf(false) }
     var sheetToDelete by remember { mutableStateOf<String?>(null) }
+    var showDeleteSectionDialog by remember { mutableStateOf(false) }
+    var sectionToDelete by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
         sheetTitles = viewModel.getAllSheetTitles()
         selectedTitle?.let { viewModel.loadResultsForTitle(it) }
     }
 
-    Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) }
-    ) { padding ->
-        Column(modifier = Modifier.padding(16.dp).padding(padding)) {
+    Scaffold(snackbarHost = { SnackbarHost(snackbarHostState) }) { padding ->
+        Column(
+            modifier = Modifier
+                .padding(16.dp)
+                .padding(padding)
+                .fillMaxSize()
+        ) {
             if (selectedTitle == null) {
+                // =================== SHEET LIST ===================
                 Text("Select OMR Sheet Title", style = MaterialTheme.typography.titleMedium)
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(Modifier.height(8.dp))
 
-                // 🔍 Search Bar
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
                     label = { Text("Search Sheet Title") },
                     modifier = Modifier.fillMaxWidth()
                 )
+                Spacer(Modifier.height(8.dp))
 
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // 📄 Sheet Title Cards
-                val filteredTitles = sheetTitles.filter {
-                    it.contains(searchQuery, ignoreCase = true)
-                }
-
+                val filteredTitles = sheetTitles.filter { it.contains(searchQuery, ignoreCase = true) }
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(filteredTitles) { title ->
                         Card(
@@ -118,7 +105,7 @@ fun ResultScreen(
                                     viewModel.loadResultsForTitle(title)
                                     searchQuery = ""
                                 },
-                            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                            elevation = CardDefaults.cardElevation(4.dp)
                         ) {
                             Row(
                                 modifier = Modifier
@@ -127,7 +114,7 @@ fun ResultScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = title,
+                                    title,
                                     style = MaterialTheme.typography.titleMedium,
                                     modifier = Modifier.weight(1f)
                                 )
@@ -136,7 +123,7 @@ fun ResultScreen(
                                     showDeleteAllConfirmDialog = true
                                 }) {
                                     Icon(
-                                        imageVector = Icons.Default.Delete,
+                                        Icons.Default.Delete,
                                         contentDescription = "Delete All Results"
                                     )
                                 }
@@ -144,55 +131,43 @@ fun ResultScreen(
                         }
                     }
                 }
-
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(Modifier.height(16.dp))
             }
 
-            // 👉 Existing results display when a title is selected
             selectedTitle?.let { title ->
+                // =================== RESULTS VIEW ===================
                 val allResults by viewModel.results.collectAsState()
 
-                val filteredResults = remember(allResults, selectedFilterOption) {
-                    when (selectedFilterOption) {
-                        FilterOption.ALL -> allResults
-                        FilterOption.PASS -> allResults.filter { it.isPass }
-                        FilterOption.FAIL -> allResults.filter { !it.isPass }
-                    }
+                val filteredResults = when (selectedFilterOption) {
+                    FilterOption.ALL -> allResults
+                    FilterOption.PASS -> allResults.filter { it.isPass }
+                    FilterOption.FAIL -> allResults.filter { !it.isPass }
                 }
 
-                val searchedResults = remember(filteredResults, searchQuery) {
-                    if (searchQuery.isBlank()) filteredResults
-                    else filteredResults.filter {
-                        it.studentName.contains(searchQuery, ignoreCase = true)
-                    }
+                val searchedResults = if (searchQuery.isBlank()) filteredResults else filteredResults.filter {
+                    it.studentName.contains(searchQuery, ignoreCase = true)
                 }
 
-                val sortedResults = remember(searchedResults, selectedSortOption) {
-                    when (selectedSortOption) {
-                        SortOption.DATE -> searchedResults.sortedByDescending { it.timestamp }
-                        SortOption.NAME -> searchedResults.sortedBy { it.studentName }
-                        SortOption.SCORE -> searchedResults.sortedByDescending { it.score }
-                    }
+                val sortedResults = when (selectedSortOption) {
+                    SortOption.DATE -> searchedResults.sortedByDescending { it.timestamp }
+                    SortOption.NAME -> searchedResults.sortedBy { it.studentName }
+                    SortOption.SCORE -> searchedResults.sortedByDescending { it.score }
                 }
 
-                val resultsBySection = remember(sortedResults) {
-                    sortedResults.groupBy { it.section.ifBlank { "No Section" } }
-                }
+                val resultsBySection = sortedResults.groupBy { it.section.ifBlank { "No Section" } }
 
                 Text("Results for \"$title\"", style = MaterialTheme.typography.titleLarge)
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(Modifier.height(8.dp))
 
-                // 🔍 Search within students
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
                     label = { Text("Search by Student Name") },
                     modifier = Modifier.fillMaxWidth()
                 )
+                Spacer(Modifier.height(8.dp))
 
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // Existing Sort & Filter Row
+                // Sort & Filter controls
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
@@ -237,9 +212,8 @@ fun ResultScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(Modifier.height(8.dp))
 
-                // 👉 Existing results list
                 if (sortedResults.isEmpty()) {
                     Text("No results found.")
                 } else {
@@ -247,128 +221,121 @@ fun ResultScreen(
                         resultsBySection.forEach { (section, resultsInSection) ->
                             val isExpanded = expandedSections.getOrElse(section) { true }
 
+                            // Section Header
                             item {
-                                Row(
+                                Card(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .clickable {
-                                            expandedSections[section] = !isExpanded
-                                        }
-                                        .background(MaterialTheme.colorScheme.primaryContainer)
-                                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                                    verticalAlignment = Alignment.CenterVertically
+                                        .padding(vertical = 6.dp),
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = MaterialTheme.colorScheme.primaryContainer
+                                    ),
+                                    elevation = CardDefaults.cardElevation(2.dp)
                                 ) {
-                                    val rotation by animateFloatAsState(targetValue = if (isExpanded) 180f else 0f)
-
-                                    Icon(
-                                        imageVector = Icons.Default.ArrowDropDown,
-                                        contentDescription = if (isExpanded) "Collapse" else "Expand",
-                                        modifier = Modifier.graphicsLayer { rotationZ = rotation }
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = section,
-                                        style = MaterialTheme.typography.titleMedium
-                                    )
-                                    Spacer(modifier = Modifier.weight(1f))
-
-                                    Text("${resultsInSection.size} result(s)")
-
-                                    Spacer(modifier = Modifier.width(8.dp))
-
-                                    IconButton(
-                                        onClick = {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable { expandedSections[section] = !isExpanded }
+                                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        val rotation by animateFloatAsState(if (isExpanded) 180f else 0f)
+                                        Icon(
+                                            Icons.Default.ArrowDropDown,
+                                            contentDescription = null,
+                                            modifier = Modifier.graphicsLayer { rotationZ = rotation }
+                                        )
+                                        Spacer(Modifier.width(8.dp))
+                                        Text(
+                                            section,
+                                            style = MaterialTheme.typography.titleMedium,
+                                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        Spacer(Modifier.weight(1f))
+                                        Text(
+                                            "${resultsInSection.size} results",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                                        )
+                                        IconButton(onClick = {
                                             sectionToDelete = section
                                             showDeleteSectionDialog = true
+                                        }) {
+                                            Icon(
+                                                Icons.Default.Delete,
+                                                contentDescription = "Delete Section",
+                                                tint = MaterialTheme.colorScheme.error
+                                            )
                                         }
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Delete,
-                                            contentDescription = "Delete Section"
-                                        )
                                     }
                                 }
                             }
 
                             if (isExpanded) {
-                                // Table header (once per section)
+                                // Table Header
                                 item {
                                     Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .background(MaterialTheme.colorScheme.surfaceVariant)
-                                            .padding(vertical = 8.dp, horizontal = 12.dp),
+                                            .background(MaterialTheme.colorScheme.primaryContainer)
+                                            .padding(horizontal = 12.dp, vertical = 10.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Text(
-                                            "Student",
-                                            modifier = Modifier.weight(2f),
-                                            style = MaterialTheme.typography.labelLarge
-                                        )
-                                        Text(
-                                            "Score",
-                                            modifier = Modifier.weight(1f),
-                                            style = MaterialTheme.typography.labelLarge
-                                        )
-                                        Text(
-                                            "Result",
-                                            modifier = Modifier.weight(1f),
-                                            style = MaterialTheme.typography.labelLarge
-                                        )
-                                        Spacer(modifier = Modifier.width(48.dp)) // delete column
+                                        Text("Student", modifier = Modifier.weight(2f))
+                                        Text("Score", modifier = Modifier.weight(1.1f))
+                                        Text("Result", modifier = Modifier.weight(1.4f))
+                                        Text("Actions", modifier = Modifier.weight(1.3f))
                                     }
                                 }
 
-                                items(resultsInSection) { result ->
-                                    val rowColor = if (result.isPass)
-                                        MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.3f)
-                                    else
-                                        MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
-
-                                    Column(
+                                // Student rows
+                                items(resultsInSection, key = { it.id }) { result ->
+                                    Divider(color = MaterialTheme.colorScheme.outlineVariant)
+                                    Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .background(rowColor)
-                                            .padding(vertical = 8.dp, horizontal = 12.dp)
+                                            .background(MaterialTheme.colorScheme.surface)
+                                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                                        verticalAlignment = Alignment.CenterVertically
                                     ) {
+                                        Text(result.studentName, modifier = Modifier.weight(2f))
+                                        Text("${result.score}/${result.totalQuestions}", modifier = Modifier.weight(1f))
+                                        Text(
+                                            if (result.isPass) "Pass" else "Fail",
+                                            modifier = Modifier.weight(1f),
+                                            color = if (result.isPass)
+                                                MaterialTheme.colorScheme.primary
+                                            else
+                                                MaterialTheme.colorScheme.error
+                                        )
                                         Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            modifier = Modifier.fillMaxWidth()
+                                            modifier = Modifier.weight(1.5f),
+                                            horizontalArrangement = Arrangement.End
                                         ) {
-                                            Text(result.studentName, modifier = Modifier.weight(2f))
-                                            Text(
-                                                "${result.score}/${result.totalQuestions}",
-                                                modifier = Modifier.weight(1f)
-                                            )
-                                            Text(
-                                                if (result.isPass) "Pass" else "Fail",
-                                                modifier = Modifier.weight(1f)
-                                            )
-
+                                            IconButton(onClick = {
+                                                dialogImagePath = result.image
+                                                showDialog = true
+                                            }) {
+                                                Icon(
+                                                    Icons.Default.Image,
+                                                    contentDescription = "View Image",
+                                                    tint = MaterialTheme.colorScheme.primary
+                                                )
+                                            }
                                             IconButton(onClick = {
                                                 resultToDelete = result
                                                 showDeleteConfirmDialog = true
                                             }) {
                                                 Icon(
                                                     Icons.Default.Delete,
-                                                    contentDescription = "Delete Result"
+                                                    contentDescription = "Delete Result",
+                                                    tint = MaterialTheme.colorScheme.error
                                                 )
                                             }
                                         }
-
-                                        // Image preview
-                                        AsyncImage(
-                                            model = result.image,
-                                            contentDescription = "Scanned Sheet",
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .height(100.dp)
-                                                .clickable {
-                                                    dialogImagePath = result.image
-                                                    showDialog = true
-                                                }
-                                                .padding(top = 4.dp)
-                                        )
                                     }
                                 }
                             }
@@ -376,183 +343,136 @@ fun ResultScreen(
                     }
                 }
             }
-        }
 
-        Spacer(modifier = Modifier.height(16.dp))
+            Spacer(Modifier.height(16.dp))
+            OutlinedButton(onClick = { selectedTitle = null }) { Text("Back to Sheets") }
 
-        OutlinedButton(onClick = { selectedTitle = null }) {
-            Text("Back to Sheets") }
+// =================== DIALOGS ===================
 
-        /**------------DIALOGS-------------**/
-        // Delete All Confirmation for a Sheet
-        if (showDeleteAllConfirmDialog && sheetToDelete != null) {
-            AlertDialog(
-                onDismissRequest = { showDeleteAllConfirmDialog = false },
-                title = { Text("Confirm Deletion") },
-                text = { Text("Delete all results of \"${sheetToDelete}\"?") },
-                confirmButton = {
-                    TextButton(onClick = {
-                        viewModel.deleteResultsForTitle(sheetToDelete!!)
-                        coroutineScope.launch {
-                            snackbarHostState.showSnackbar("Deleted all results for \"$sheetToDelete\"")
-                        }
-                        sheetTitles =
-                            sheetTitles.filterNot { it == sheetToDelete }
-                        if (selectedTitle == sheetToDelete) selectedTitle = null
-                        sheetToDelete = null
-                        showDeleteAllConfirmDialog = false
-                    }) {
-                        Text("Delete All")
-                    } },
-                dismissButton = {
-                    TextButton(onClick = {
-                        showDeleteAllConfirmDialog = false
-                        sheetToDelete = null
-                    }) {
-                        Text("Cancel")
+            // Delete All Confirmation for a Sheet
+            if (showDeleteAllConfirmDialog && sheetToDelete != null) {
+                AlertDialog(
+                    onDismissRequest = { showDeleteAllConfirmDialog = false },
+                    title = { Text("Confirm Deletion") },
+                    text = { Text("Delete all results of \"$sheetToDelete\"?") },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            viewModel.deleteResultsForTitle(sheetToDelete!!)
+                            coroutineScope.launch {
+                                snackbarHostState.showSnackbar("Deleted all results for \"$sheetToDelete\"")
+                            }
+                            sheetTitles = sheetTitles.filterNot { it == sheetToDelete }
+                            if (selectedTitle == sheetToDelete) selectedTitle = null
+                            sheetToDelete = null
+                            showDeleteAllConfirmDialog = false
+                        }) { Text("Delete All") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = {
+                            showDeleteAllConfirmDialog = false
+                            sheetToDelete = null
+                        }) { Text("Cancel") }
                     }
-                }
-            )
-        }
+                )
+            }
 
-        // Fullscreen Zoomable Image Viewer
-        if (showDialog && dialogImagePath != null) {
-            var scale by remember { mutableStateOf(1f) }
-            var offsetX by remember { mutableStateOf(0f) }
-            var offsetY by remember { mutableStateOf(0f) }
-            Surface(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black),
-                color = Color.Black
-            ) {
-                Box(
+            // Fullscreen Zoomable Image Viewer
+            if (showDialog && dialogImagePath != null) {
+                var scale by remember { mutableStateOf(1f) }
+                var offsetX by remember { mutableStateOf(0f) }
+                var offsetY by remember { mutableStateOf(0f) }
+                Surface(
                     modifier = Modifier
                         .fillMaxSize()
-                        .pointerInput(Unit) {
-                            detectTransformGestures { _, pan, zoom, _ ->
-                                scale = (scale * zoom).coerceIn(1f, 5f)
-                                offsetX += pan.x
-                                offsetY += pan.y
-                            }
-                        }
+                        .background(Color.Black),
+                    color = Color.Black
                 ) {
-                    AsyncImage(
-                        model = dialogImagePath,
-                        contentDescription = "Full Image",
+                    Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .graphicsLayer(
-                                scaleX = scale,
-                                scaleY = scale,
-                                translationX = offsetX,
-                                translationY = offsetY
-                            )
-                    )
-                    IconButton(
-                        onClick = { showDialog = false },
-                        modifier = Modifier
-                            .padding(16.dp)
-                            .align(Alignment.TopEnd)
-                            .size(36.dp)
-                            .background(
-                                Color.Black.copy(alpha = 0.5f),
-                                shape = CircleShape
-                            )
+                            .pointerInput(Unit) {
+                                detectTransformGestures { _, pan, zoom, _ ->
+                                    scale = (scale * zoom).coerceIn(1f, 5f)
+                                    offsetX += pan.x
+                                    offsetY += pan.y
+                                }
+                            }
                     ) {
-                        Icon(
-                            imageVector = Icons.Filled.Close,
-                            contentDescription = "Close Fullscreen",
-                            tint = Color.White
+                        AsyncImage(
+                            model = dialogImagePath,
+                            contentDescription = "Full Image",
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .graphicsLayer(
+                                    scaleX = scale,
+                                    scaleY = scale,
+                                    translationX = offsetX,
+                                    translationY = offsetY
+                                )
                         )
+                        IconButton(
+                            onClick = { showDialog = false },
+                            modifier = Modifier
+                                .padding(16.dp)
+                                .align(Alignment.TopEnd)
+                                .size(36.dp)
+                                .background(Color.Black.copy(alpha = 0.5f), shape = CircleShape)
+                        ) {
+                            Icon(
+                                Icons.Filled.Close,
+                                contentDescription = "Close Fullscreen",
+                                tint = Color.White
+                            )
+                        }
                     }
                 }
             }
-        }
 
-        // Single Delete Confirmation Dialog
-        if (showDeleteConfirmDialog && resultToDelete != null) {
-            AlertDialog(
-                onDismissRequest = { showDeleteConfirmDialog = false },
-                title = { Text("Confirm Deletion") },
-                text = { Text("Are you sure you want to delete result for ${resultToDelete!!.studentName}?") },
-                confirmButton = {
-                    TextButton(onClick = {
-                        viewModel.deleteStudentResult(resultToDelete!!)
-                        showDeleteConfirmDialog = false
-                        coroutineScope.launch {
-                            snackbarHostState.showSnackbar("Deleted result for ${resultToDelete!!.studentName}")
-                        }
-                    }) {
-                        Text("Delete")
-                    } },
-                dismissButton = {
-                    TextButton(onClick = { showDeleteConfirmDialog = false }) {
-                        Text("Cancel")
+            // Single Delete Confirmation Dialog
+            if (showDeleteConfirmDialog && resultToDelete != null) {
+                AlertDialog(
+                    onDismissRequest = { showDeleteConfirmDialog = false },
+                    title = { Text("Confirm Deletion") },
+                    text = { Text("Delete result for ${resultToDelete!!.studentName}?") },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            viewModel.deleteStudentResult(resultToDelete!!)
+                            showDeleteConfirmDialog = false
+                            coroutineScope.launch {
+                                snackbarHostState.showSnackbar("Deleted result for ${resultToDelete!!.studentName}")
+                            }
+                        }) { Text("Delete") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showDeleteConfirmDialog = false }) { Text("Cancel") }
                     }
-                }
-            )
-        }
+                )
+            }
 
-        // Delete Section Confirmation Dialog
-        if (showDeleteSectionDialog && sectionToDelete != null && selectedTitle != null) {
-            AlertDialog(
-                onDismissRequest = { showDeleteSectionDialog = false },
-                title = { Text("Confirm Delete Section") },
-                text = { Text("Are you sure you want to delete all results in section \"$sectionToDelete\"?") },
-                confirmButton = {
-                    TextButton(onClick = {
-                        viewModel.deleteResultsForSection(
-                            selectedTitle!!,
-                            sectionToDelete!!
-                        )
-                        coroutineScope.launch {
-                            snackbarHostState.showSnackbar("Deleted section \"$sectionToDelete\"")
-                        }
-                        showDeleteSectionDialog = false
-                        sectionToDelete = null
-                    }) {
-                        Text("Delete")
-                    } },
-                dismissButton = {
-                    TextButton(onClick = {
-                        showDeleteSectionDialog = false
-                        sectionToDelete = null
-                    }) {
-                        Text("Cancel")
+            // Delete Section Confirmation Dialog
+            if (showDeleteSectionDialog && sectionToDelete != null && selectedTitle != null) {
+                AlertDialog(
+                    onDismissRequest = { showDeleteSectionDialog = false },
+                    title = { Text("Confirm Delete Section") },
+                    text = { Text("Delete all results in section \"$sectionToDelete\"?") },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            viewModel.deleteResultsForSection(selectedTitle!!, sectionToDelete!!)
+                            coroutineScope.launch {
+                                snackbarHostState.showSnackbar("Deleted section \"$sectionToDelete\"")
+                            }
+                            showDeleteSectionDialog = false
+                            sectionToDelete = null
+                        }) { Text("Delete") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = {
+                            showDeleteSectionDialog = false
+                            sectionToDelete = null
+                        }) { Text("Cancel") }
                     }
-                }
-            )
-        }
-
-        // Delete All Results Confirmation
-        if (showDeleteAllConfirmDialog && selectedTitle != null) {
-            AlertDialog(
-                onDismissRequest = { showDeleteAllConfirmDialog = false },
-                title = { Text("Confirm Deletion") },
-                text = { Text("Are you sure you want to delete all results of \"$selectedTitle\"?") },
-                confirmButton = {
-                    TextButton(onClick = {
-                        viewModel.deleteResultsForTitle(selectedTitle!!)
-                        coroutineScope.launch {
-                            snackbarHostState.showSnackbar("Deleted all results for \"$selectedTitle\"")
-                        }
-                        val removedTitle = selectedTitle
-                        selectedTitle = null
-                        sheetTitles =
-                            sheetTitles.filterNot { it == removedTitle }
-                        showDeleteAllConfirmDialog = false
-                    }) {
-                        Text("Delete All")
-                    } },
-                dismissButton = {
-                    TextButton(onClick = {
-                        showDeleteAllConfirmDialog = false
-                    }) {
-                        Text("Cancel")
-                    }
-                }
-            )
+                )
+            }
         }
     }
 }
