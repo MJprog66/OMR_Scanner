@@ -32,9 +32,22 @@ fun UserLoginScreen(
     var showPassword by remember { mutableStateOf(false) }
     var isLoading by remember { mutableStateOf(false) }
 
+    // Check persistent login
+    LaunchedEffect(Unit) {
+        val sharedPref = context.getSharedPreferences("login_prefs", 0)
+        val isLoggedIn = sharedPref.getBoolean("isLoggedIn", false)
+        val userType = sharedPref.getString("userType", "")
+        if (isLoggedIn && userType == "user") {
+            onLoginSuccess()
+        }
+    }
+
     Scaffold(snackbarHost = { SnackbarHost(snackbarHostState) }) { padding ->
         Column(
-            modifier = Modifier.fillMaxSize().padding(padding).padding(24.dp),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(24.dp),
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -80,6 +93,15 @@ fun UserLoginScreen(
                         val result = UserManager.login(email.trim(), password)
                         isLoading = false
                         if (result.isSuccess) {
+                            // Save persistent login
+                            val sharedPref = context.getSharedPreferences("login_prefs", 0)
+                            with(sharedPref.edit()) {
+                                putBoolean("isLoggedIn", true)
+                                putString("userType", "user")
+                                putString("userEmail", email.trim())
+                                apply()
+                            }
+
                             onLoginSuccess()
                         } else {
                             snackbarHostState.showSnackbar(result.exceptionOrNull()?.message ?: "Login failed")

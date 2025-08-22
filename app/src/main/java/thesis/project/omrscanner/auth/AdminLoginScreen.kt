@@ -35,6 +35,16 @@ fun AdminLoginScreen(
     var showPassword by remember { mutableStateOf(false) }
     var isLoading by remember { mutableStateOf(false) }
 
+    // Check persistent login
+    LaunchedEffect(Unit) {
+        val sharedPref = context.getSharedPreferences("login_prefs", 0)
+        val isLoggedIn = sharedPref.getBoolean("isLoggedIn", false)
+        val userType = sharedPref.getString("userType", "")
+        if (isLoggedIn && userType == "admin") {
+            onLoginSuccess()
+        }
+    }
+
     Scaffold(snackbarHost = { SnackbarHost(snackbarHostState) }) { padding ->
         Column(
             modifier = Modifier
@@ -88,7 +98,6 @@ fun AdminLoginScreen(
                             val auth = FirebaseAuth.getInstance()
                             val firestore = FirebaseFirestore.getInstance()
 
-                            // Sign in with Firebase Auth
                             val result = auth.signInWithEmailAndPassword(email.trim(), password).await()
                             val uid = result.user?.uid
 
@@ -98,12 +107,20 @@ fun AdminLoginScreen(
                                 return@launch
                             }
 
-                            // Get Firestore user document
                             val doc = firestore.collection("users").document(uid).get().await()
                             val isAdmin = doc.getBoolean("isAdmin") ?: false
                             val approved = doc.getBoolean("approved") ?: false
 
                             if (isAdmin && approved) {
+                                // Save persistent login
+                                val sharedPref = context.getSharedPreferences("login_prefs", 0)
+                                with(sharedPref.edit()) {
+                                    putBoolean("isLoggedIn", true)
+                                    putString("userType", "admin")
+                                    putString("userEmail", email.trim())
+                                    apply()
+                                }
+
                                 snackbarHostState.showSnackbar("Admin login successful!")
                                 onLoginSuccess()
                             } else {
